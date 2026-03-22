@@ -9,7 +9,6 @@ type Counselor = {
   title: string;
   tags: string[];
   years: string;
-  rate: string;
   rating: string;
   avatar: string;
   online?: boolean;
@@ -18,42 +17,38 @@ type Counselor = {
 const counselors: Counselor[] = [
   {
     id: '1',
-    name: 'Dr. Sarah Jenkins',
+    name: 'Mrs. Dinithi jayawardane',
     title: 'CLINICAL PSYCHOLOGIST',
     tags: ['Anxiety', 'CBT', 'Depression'],
     years: '12 years',
-    rate: '$80/hr',
     rating: '4.9',
     avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=300&q=80',
     online: true,
   },
   {
     id: '2',
-    name: 'Marcus Thompson',
+    name: 'Mr. Anula Nikapitiya',
     title: 'MARRIAGE & FAMILY THERAPIST',
     tags: ['Relationships', 'Family', 'Stress'],
     years: '8 years',
-    rate: '$65/hr',
     rating: '4.8',
     avatar: 'https://images.unsplash.com/photo-1614436163996-25cee5f54290?auto=format&fit=crop&w=300&q=80',
   },
   {
     id: '3',
-    name: 'Dr. Elena Rodriguez',
+    name: 'Ms. jayani Mendis',
     title: 'PSYCHIATRIST',
     tags: ['Medication', 'Bipolar', 'PTSD'],
     years: '15 years',
-    rate: '$120/hr',
     rating: '5',
     avatar: 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?auto=format&fit=crop&w=300&q=80',
   },
   {
     id: '4',
-    name: 'Jason Chen',
+    name: 'Mr. Nalaka Mendis',
     title: 'HOLISTIC COUNSELOR',
     tags: ['Mindfulness', 'Meditation', 'Grief'],
     years: '6 years',
-    rate: '$55/hr',
     rating: '4.7',
     avatar: 'https://images.unsplash.com/photo-1607746882042-944635dfe10e?auto=format&fit=crop&w=300&q=80',
   },
@@ -121,7 +116,6 @@ export default function CounselorsPage() {
                 </View>
                 <View style={styles.infoPill}>
                   <Feather name="clock" size={10} color="#8A94A2" />
-                  <Text style={styles.infoText}>{item.rate}</Text>
                 </View>
               </View>
 
