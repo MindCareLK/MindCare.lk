@@ -48,7 +48,7 @@ export default function HomePage() {
             <View style={styles.brandIcon}>
               <Ionicons name="flash-outline" size={15} color="#FFFFFF" />
             </View>
-            <Text style={styles.brandText}>MINDEASE</Text>
+            <Text style={styles.brandText}>MindCare.lk</Text>
             <TouchableOpacity style={styles.headerIcon} activeOpacity={0.8}>
               <Feather name="bell" size={16} color="#59606A" />
             </TouchableOpacity>
