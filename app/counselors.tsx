@@ -167,7 +167,7 @@ export default function CounselorsPage() {
             <Feather name="users" size={16} color="#2F88E8" />
             <Text style={styles.navActive}>Counselors</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.navItem} activeOpacity={0.85} onPress={() => router.replace('/profile')}>
             <Feather name="user" size={16} color="#99A2AD" />
             <Text style={styles.navText}>Profile</Text>
           </TouchableOpacity>

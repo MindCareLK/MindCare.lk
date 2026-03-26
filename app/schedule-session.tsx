@@ -299,7 +299,7 @@ export default function ScheduleSessionPage() {
             <Feather name="users" size={18} color="#2F88E8" />
             <Text style={styles.navActive}>Counselors</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.navItem} activeOpacity={0.85} onPress={() => router.replace('/profile')}>
             <Feather name="user" size={18} color="#9AA3AE" />
             <Text style={styles.navText}>Profile</Text>
           </TouchableOpacity>
