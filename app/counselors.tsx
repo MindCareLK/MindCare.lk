@@ -1,4 +1,4 @@
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -108,14 +108,15 @@ export default function CounselorsPage() {
                   </View>
                 </View>
               </View>
+              <View style={{ borderBottomWidth: 1, borderBottomColor: '#ccc', marginVertical: 10, marginLeft: 60, }} />
 
               <View style={styles.infoRow}>
                 <View style={styles.infoPill}>
-                  <Feather name="briefcase" size={10} color="#8A94A2" />
+                  <MaterialCommunityIcons name="license" size={15} color="#6B7280" />
                   <Text style={styles.infoText}>{item.years}</Text>
                 </View>
                 <View style={styles.infoPill}>
-                  <Feather name="clock" size={10} color="#8A94A2" />
+                  <Feather name="clock" size={15} color="#6B7280" />
                 </View>
               </View>
 
@@ -127,7 +128,7 @@ export default function CounselorsPage() {
 
           <View style={styles.verifiedCard}>
             <View style={styles.verifiedIcon}>
-              <Feather name="check-circle" size={14} color="#6EA8E8" />
+              <FontAwesome5 name="check-circle" size={24} color="#0098FF" />
             </View>
             <Text style={styles.verifiedTitle}>Verified Professionals</Text>
             <Text style={styles.verifiedText}>
@@ -255,7 +256,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#DEE4EC',
     backgroundColor: '#FFFFFF',
-    padding: 10,
+    padding: 12,
     gap: 8,
   },
   cardHeader: {
@@ -267,9 +268,9 @@ const styles = StyleSheet.create({
     height: 44,
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
   onlineDot: {
     position: 'absolute',
@@ -290,6 +291,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginLeft: 10,
   },
   name: {
     fontFamily: 'Inter',
@@ -317,32 +319,40 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: 'Inter',
     fontSize: 10,
+    marginLeft: 10,
     lineHeight: 12,
     color: '#8A94A2',
     fontWeight: '700',
     letterSpacing: 0.4,
   },
   tagsRow: {
-    marginTop: 2,
+    marginTop: 6,
     flexDirection: 'row',
     gap: 12,
+    marginLeft: 10, 
   },
   tagText: {
     fontFamily: 'Inter',
     fontSize: 9,
     lineHeight: 12,
-    color: '#687384',
+    color: '#000000',
     fontWeight: '600',
+    backgroundColor: '#D9D9D9',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginLeft: 60,
   },
   infoPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    marginRight: 70,
   },
   infoText: {
     fontFamily: 'Inter',
@@ -357,6 +367,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#2F88E8',
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 10,
+    marginTop: 5,
   },
   bookText: {
     fontFamily: 'Inter',
@@ -366,23 +378,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   verifiedCard: {
-    marginTop: 4,
+    marginTop: 20,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E7EE',
     backgroundColor: '#F8FAFC',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 25,
     gap: 6,
   },
   verifiedIcon: {
-    width: 23,
-    height: 23,
-    borderRadius: 11.5,
-    backgroundColor: '#EAF3FE',
+    width: 50,
+    height: 50,
+    borderRadius: 50,
+    backgroundColor: '#0099ff3c',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 16,
   },
   verifiedTitle: {
     fontFamily: 'Inter',
@@ -390,14 +403,16 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: '#4A5563',
     fontWeight: '700',
+    marginBottom: 4,
   },
   verifiedText: {
     textAlign: 'center',
     fontFamily: 'Inter',
     fontSize: 10,
     lineHeight: 13,
-    color: '#8C96A3',
+    color: '#000000',
     fontWeight: '500',
+    marginBottom: 5,
   },
   bottomBar: {
     position: 'absolute',
