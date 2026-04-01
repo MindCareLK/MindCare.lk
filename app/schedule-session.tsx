@@ -141,13 +141,28 @@ export default function ScheduleSessionPage() {
                 </Text>
                 <View style={styles.counselorFooter}>
                   <View style={styles.tagRow}>
-                    {counselorTags.map((tag) => (
-                      <Text key={tag} style={styles.tagText}>
+                    {counselorTags.map((tag, index) => (
+                      <Text key={`${tag}-${index}`} style={styles.tagText}>
                         {tag}
                       </Text>
                     ))}
                   </View>
-                  <TouchableOpacity style={styles.profileButton} activeOpacity={0.85}>
+                  
+                  {/* Updated Navigation logic for the existing View Profile button */}
+                  <TouchableOpacity 
+                    style={styles.profileButton} 
+                    activeOpacity={0.85}
+                    onPress={() => router.push({
+                      pathname: '/doctor_profile',
+                      params: {
+                        name: counselorName,
+                        title: counselorTitle,
+                        years: counselorYears,
+                        avatar: counselorAvatar,
+                        tags: counselorTags.join(',')
+                      }
+                    })}
+                  >
                     <Text style={styles.profileButtonText}>View Profile</Text>
                   </TouchableOpacity>
                 </View>
@@ -181,8 +196,8 @@ export default function ScheduleSessionPage() {
               <Text style={styles.calendarHint}>Choose your preferred date</Text>
 
               <View style={styles.weekRow}>
-                {WEEK_DAYS.map((day) => (
-                  <Text key={day} style={styles.weekDay}>
+                {WEEK_DAYS.map((day, index) => (
+                  <Text key={`${day}-${index}`} style={styles.weekDay}>
                     {day}
                   </Text>
                 ))}
@@ -231,12 +246,12 @@ export default function ScheduleSessionPage() {
             </View>
 
             <View style={styles.slotGrid}>
-              {SLOT_LABELS.map((slot) => {
+              {SLOT_LABELS.map((slot, index) => {
                 const isActive = slot === selectedSlot;
 
                 return (
                   <TouchableOpacity
-                    key={slot}
+                    key={`${slot}-${index}`}
                     style={[styles.slotButton, isActive && styles.slotButtonActive]}
                     activeOpacity={0.88}
                     onPress={() => setSelectedSlot(slot)}>
@@ -299,7 +314,7 @@ export default function ScheduleSessionPage() {
             <Feather name="users" size={18} color="#2F88E8" />
             <Text style={styles.navActive}>Counselors</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.navItem} activeOpacity={0.85} onPress={() => router.replace('/profile')}>
             <Feather name="user" size={18} color="#9AA3AE" />
             <Text style={styles.navText}>Profile</Text>
           </TouchableOpacity>
@@ -310,6 +325,7 @@ export default function ScheduleSessionPage() {
 }
 
 const styles = StyleSheet.create({
+  
   safeArea: {
     flex: 1,
     backgroundColor: '#FFFFFF',

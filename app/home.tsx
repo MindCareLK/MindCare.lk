@@ -48,7 +48,7 @@ export default function HomePage() {
             <View style={styles.brandIcon}>
               <Ionicons name="flash-outline" size={15} color="#FFFFFF" />
             </View>
-            <Text style={styles.brandText}>MINDEASE</Text>
+            <Text style={styles.brandText}>MindCare.lk</Text>
             <TouchableOpacity style={styles.headerIcon} activeOpacity={0.8}>
               <Feather name="bell" size={16} color="#59606A" />
             </TouchableOpacity>
@@ -138,7 +138,7 @@ export default function HomePage() {
             <Feather name="users" size={16} color="#99A2AD" />
             <Text style={styles.navText}>Counselors</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.navItem} activeOpacity={0.85} onPress={() => router.replace('/profile')}>
             <Feather name="user" size={16} color="#99A2AD" />
             <Text style={styles.navText}>Profile</Text>
           </TouchableOpacity>
