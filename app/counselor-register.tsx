@@ -94,7 +94,7 @@ export default function CounselorRegisterScreen() {
             showsVerticalScrollIndicator={false}
             bounces={false}>
             <View style={styles.iconTile}>
-              <MaterialCommunityIcons name="stethoscope" size={50} color="#FFFFFF" />
+              <MaterialCommunityIcons name="stethoscope" size={43} color="#FFFFFF" />
             </View>
 
             <Text style={styles.label}>Mr/ Mrs/ Ms</Text>
@@ -220,8 +220,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   roleText: {
-    marginTop: 28,
-    marginBottom: 16,
+    marginTop: 20,
+    marginBottom: 11,
     textAlign: 'center',
     fontFamily: 'Inter',
     fontSize: 22,
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 64,
     borderTopRightRadius: 64,
     backgroundColor: '#F3F4F6',
-    paddingTop: 22,
+    paddingTop: 15,
     overflow: 'hidden',
   },
   formContent: {
@@ -244,8 +244,8 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   iconTile: {
-    width: 100,
-    height: 100,
+    width: 70,
+    height: 70,
     borderRadius: 22,
     backgroundColor: '#2F88E8',
     justifyContent: 'center',
@@ -257,27 +257,27 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 4,
     fontFamily: 'Inter',
-    fontSize: 14,
+    fontSize: 12.5,
     lineHeight: 19,
     color: '#161616',
     fontWeight: '500',
   },
   inputWrap: {
-    height: 56,
+    height: 42,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   input: {
     flex: 1,
     fontFamily: 'Inter',
-    fontSize: 18,
+    fontSize: 14,
     lineHeight: 24,
     color: '#232323',
   },
   signUpButton: {
-    marginTop: 18,
-    height: 68,
+    marginTop: 12,
+    height: 45,
     borderRadius: 14,
     backgroundColor: '#2F88E8',
     justifyContent: 'center',
@@ -285,13 +285,13 @@ const styles = StyleSheet.create({
   },
   signUpText: {
     fontFamily: 'Inter',
-    fontSize: 24,
+    fontSize: 18,
     lineHeight: 28,
     color: '#FFFFFF',
     fontWeight: '800',
   },
   signInRow: {
-    marginTop: 16,
+    marginTop: 10,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
@@ -299,23 +299,23 @@ const styles = StyleSheet.create({
   },
   signInPrompt: {
     fontFamily: 'Inter',
-    fontSize: 14,
+    fontSize: 12,
     lineHeight: 19,
     color: '#3D3D3D',
     fontWeight: '600',
   },
   signInLink: {
     fontFamily: 'Inter',
-    fontSize: 14,
+    fontSize: 12,
     lineHeight: 19,
     color: '#0F8AF1',
     fontWeight: '700',
   },
   termsText: {
-    marginTop: 6,
+    marginTop: 0,
     textAlign: 'center',
     fontFamily: 'Inter',
-    fontSize: 11,
+    fontSize: 10,
     lineHeight: 15,
     color: '#7E7E7E',
     fontWeight: '500',
@@ -323,12 +323,13 @@ const styles = StyleSheet.create({
   },
   bottomArc: {
     position: 'absolute',
-    width: 640,
-    height: 300,
-    borderRadius: 320,
+    width: 400,
+    height: 290,
     backgroundColor: '#2F88E8',
-    left: -120,
-    bottom: -220,
+    left: -70,
+    bottom: -230,
+    borderTopLeftRadius: 5000,
+    borderTopRightRadius: 1400,
     opacity: 0.96,
     zIndex: 0,
   },
