@@ -150,7 +150,7 @@ export default function CounselorsPage() {
             </View>
             <Text style={styles.verifiedTitle}>Verified Professionals</Text>
             <Text style={styles.verifiedText}>
-              All MindEase counselors are licensed practitioners with vetted credentials and background checks.
+              All Mindcare counselors are licensed practitioners with vetted credentials and background checks.
             </Text>
           </View>
         </ScrollView>
