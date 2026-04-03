@@ -137,8 +137,9 @@ export default function ReviewsPage() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
   container: { flex: 1 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F4F7' },
-  headerTitleWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F4F7' },
+  profile: {alignSelf: 'flex-start'},
+  headerTitleWrap: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   headerAvatar: { width: 32, height: 32, borderRadius: 16 },
   headerName: { fontSize: 15, fontWeight: '800', color: '#141B25' },
   headerSub: { fontSize: 11, color: '#7D8795' },
