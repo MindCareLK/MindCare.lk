@@ -8,6 +8,9 @@ const reviewsData = [
   { id: '1', name: 'Emily Rodriguez', date: 'March 2, 2026', rating: 5, initial: 'E', color: '#2F88E8', text: 'Dr. Jenkins is incredibly empathetic and helped me professional. Her CBT approach has managed my anxiety. Highly recommend!' },
   { id: '2', name: 'Michael Chen', date: 'February 28, 2026', rating: 5, initial: 'M', color: '#2F88E8', text: 'Outstanding therapist! She creates a safe space and her insights are Always valuable. I\'ve made tremendous progress in just a few months.' },
   { id: '3', name: 'Sarah Thompson', date: 'February 18, 2026', rating: 4, initial: 'S', color: '#2F88E8', text: 'Very professional and knowledgeable. The sessions are well-structured and I appreciate her evidence-based approach.' },
+  { id: '4', name: 'David Kim', date: 'February 10, 2026', rating: 5, initial: 'D', color: '#2F88E8', text: 'Dr. Jenkins is exceptional! Her compassionate approach and expert knowledge have made a significant difference in my mental health journey.' },
+  { id: '5', name: 'Sarah Thompson', date: 'February 18, 2026', rating: 4, initial: 'S', color: '#2F88E8', text: 'Very professional and knowledgeable. The sessions are well-structured and I appreciate her evidence-based approach.' },
+  { id: '6', name: 'John Doe', date: 'February 5, 2026', rating: 5, initial: 'J', color: '#2F88E8', text: 'Dr. Jenkins is a wonderful therapist. She genuinely cares about her patients and provides excellent support.' },
 ];
 
 export default function ReviewsPage() {
@@ -170,7 +173,7 @@ const styles = StyleSheet.create({
 
   showingText: { fontSize: 11, color: '#7D8795', fontWeight: '600', marginBottom: 12 },
   
-  reviewCard: { padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#EDF2F7', marginBottom: 12 },
+  reviewCard: { backgroundColor: '#FFFFFF', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#EDF2F7', marginBottom: 12 , shadowColor: '#000', shadowOffset: { width: 1, height: 2 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 3 },
   reviewHeader: { flexDirection: 'row', gap: 12, marginBottom: 10 },
   avatarCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   avatarInitial: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
