@@ -1,37 +1,48 @@
-import { Feather, Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
-import * as Haptics from 'expo-haptics';
-import * as ImagePicker from 'expo-image-picker';
-import { useMemo, useState } from 'react';
-import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Feather, Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
+import { router, useLocalSearchParams } from "expo-router";
+import { useMemo, useState } from "react";
+import {
+  Alert,
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const MAX_BIO_LENGTH = 500;
 
 const SPECIALTY_OPTIONS = [
-  'Clinical Psychology',
-  'Counseling Psychology',
-  'Child and Adolescent Therapy',
-  'Marriage and Family Therapy',
-  'Trauma Therapy',
-  'Addiction Counseling',
+  "Clinical Psychology",
+  "Counseling Psychology",
+  "Child and Adolescent Therapy",
+  "Marriage and Family Therapy",
+  "Trauma Therapy",
+  "Addiction Counseling",
 ];
 
 const COMMON_QUALIFICATIONS = [
-  'PhD Psychology',
-  'MSc Clinical Psychology',
-  'MA Counseling Psychology',
-  'Licensed Clinical Social Worker',
-  'Licensed Professional Counselor',
-  'Certified CBT Therapist',
+  "PhD Psychology",
+  "MSc Clinical Psychology",
+  "MA Counseling Psychology",
+  "Licensed Clinical Social Worker",
+  "Licensed Professional Counselor",
+  "Certified CBT Therapist",
 ];
 
 const COMMON_RESEARCH_STUDIES = [
-  'Counselling for Stress and Anxiety in Young Adults',
-  'Reducing Stress and Anxiety through Counselling',
-  'Effectiveness of CBT for Depression',
-  'Mindfulness-Based Therapy for Chronic Stress',
-  'Trauma Recovery Outcomes in Adolescents',
+  "Counselling for Stress and Anxiety in Young Adults",
+  "Reducing Stress and Anxiety through Counselling",
+  "Effectiveness of CBT for Depression",
+  "Mindfulness-Based Therapy for Chronic Stress",
+  "Trauma Recovery Outcomes in Adolescents",
 ];
 
 type SearchParams = {
@@ -40,76 +51,94 @@ type SearchParams = {
   salutation?: string | string[];
 };
 
-const SALUTATIONS = ['Mr', 'Mrs', 'Ms'] as const;
+const SALUTATIONS = ["Mr", "Mrs", "Ms"] as const;
 
 const toSingleValue = (value: string | string[] | undefined): string =>
-  typeof value === 'string' ? value : Array.isArray(value) ? value[0] ?? '' : '';
+  typeof value === "string"
+    ? value
+    : Array.isArray(value)
+      ? (value[0] ?? "")
+      : "";
 
 const normalizeSalutation = (value: string): string => {
-  const compactValue = value.replace(/\./g, '').trim().toLowerCase();
+  const compactValue = value.replace(/\./g, "").trim().toLowerCase();
   const match = SALUTATIONS.find((item) => item.toLowerCase() === compactValue);
-  return match ?? '';
+  return match ?? "";
 };
 
-const splitDisplayName = (value: string): { salutation: string; name: string } => {
+const splitDisplayName = (
+  value: string,
+): { salutation: string; name: string } => {
   const trimmedValue = value.trim();
-  if (!trimmedValue) return { salutation: '', name: '' };
+  if (!trimmedValue) return { salutation: "", name: "" };
 
   const match = trimmedValue.match(/^(mr|mrs|ms)\.?\s+(.+)$/i);
-  if (!match) return { salutation: '', name: trimmedValue };
+  if (!match) return { salutation: "", name: trimmedValue };
 
-  const parsedSalutation = normalizeSalutation(match[1] ?? '');
-  const parsedName = (match[2] ?? '').trim();
+  const parsedSalutation = normalizeSalutation(match[1] ?? "");
+  const parsedName = (match[2] ?? "").trim();
   return { salutation: parsedSalutation, name: parsedName };
 };
 
-const buildDisplayName = (selectedSalutation: string, rawName: string): string => {
+const buildDisplayName = (
+  selectedSalutation: string,
+  rawName: string,
+): string => {
   const parsed = splitDisplayName(rawName);
   const finalName = parsed.name.trim();
-  const finalSalutation = normalizeSalutation(selectedSalutation) || parsed.salutation || 'Mr';
+  const finalSalutation =
+    normalizeSalutation(selectedSalutation) || parsed.salutation || "Mr";
   return finalName ? `${finalSalutation} ${finalName}` : finalSalutation;
 };
 
 const deriveNameFromEmail = (email: string): string => {
-  const localPart = email.split('@')[0] ?? '';
-  if (!localPart) return '';
+  const localPart = email.split("@")[0] ?? "";
+  if (!localPart) return "";
   return localPart
-    .replace(/[._-]+/g, ' ')
-    .split(' ')
+    .replace(/[._-]+/g, " ")
+    .split(" ")
     .filter(Boolean)
     .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
-    .join(' ');
+    .join(" ");
 };
 
 export default function CounselorProfileScreen() {
   const params = useLocalSearchParams<SearchParams>();
-  const rawName = toSingleValue(params.name) || deriveNameFromEmail(toSingleValue(params.email));
+  const rawName =
+    toSingleValue(params.name) ||
+    deriveNameFromEmail(toSingleValue(params.email));
   const parsedInitialName = splitDisplayName(rawName);
   const initialName = parsedInitialName.name;
-  const initialSalutation = normalizeSalutation(toSingleValue(params.salutation)) || parsedInitialName.salutation || 'Mr';
+  const initialSalutation =
+    normalizeSalutation(toSingleValue(params.salutation)) ||
+    parsedInitialName.salutation ||
+    "Mr";
 
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [salutation, setSalutation] = useState(initialSalutation);
+  const [showSalutations, setShowSalutations] = useState(false);
 
   const [fullName, setFullName] = useState(initialName);
-  const [specialty, setSpecialty] = useState('');
+  const [specialty, setSpecialty] = useState("");
   const [showSpecialties, setShowSpecialties] = useState(false);
 
   const [qualifications, setQualifications] = useState<string[]>([]);
-  const [qualificationInputVisible, setQualificationInputVisible] = useState(false);
-  const [qualificationDraft, setQualificationDraft] = useState('');
+  const [qualificationInputVisible, setQualificationInputVisible] =
+    useState(false);
+  const [qualificationDraft, setQualificationDraft] = useState("");
 
   const [researchStudies, setResearchStudies] = useState<string[]>([]);
   const [researchInputVisible, setResearchInputVisible] = useState(false);
-  const [researchDraft, setResearchDraft] = useState('');
+  const [researchDraft, setResearchDraft] = useState("");
 
-  const [bio, setBio] = useState('');
+  const [bio, setBio] = useState("");
 
   const qualificationSuggestions = useMemo(() => {
     const normalizedDraft = qualificationDraft.trim().toLowerCase();
     return COMMON_QUALIFICATIONS.filter((item) => {
       const notAdded = !qualifications.includes(item);
-      const matches = !normalizedDraft || item.toLowerCase().includes(normalizedDraft);
+      const matches =
+        !normalizedDraft || item.toLowerCase().includes(normalizedDraft);
       return notAdded && matches;
     }).slice(0, 4);
   }, [qualificationDraft, qualifications]);
@@ -118,7 +147,8 @@ export default function CounselorProfileScreen() {
     const normalizedDraft = researchDraft.trim().toLowerCase();
     return COMMON_RESEARCH_STUDIES.filter((item) => {
       const notAdded = !researchStudies.includes(item);
-      const matches = !normalizedDraft || item.toLowerCase().includes(normalizedDraft);
+      const matches =
+        !normalizedDraft || item.toLowerCase().includes(normalizedDraft);
       return notAdded && matches;
     }).slice(0, 4);
   }, [researchDraft, researchStudies]);
@@ -126,7 +156,10 @@ export default function CounselorProfileScreen() {
   const pickFromGallery = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Permission Needed', 'Please allow photo library access to select an image.');
+      Alert.alert(
+        "Permission Needed",
+        "Please allow photo library access to select an image.",
+      );
       return;
     }
 
@@ -146,7 +179,10 @@ export default function CounselorProfileScreen() {
   const capturePhoto = async () => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Permission Needed', 'Please allow camera access to take a photo.');
+      Alert.alert(
+        "Permission Needed",
+        "Please allow camera access to take a photo.",
+      );
       return;
     }
 
@@ -163,14 +199,14 @@ export default function CounselorProfileScreen() {
   };
 
   const handlePhotoAction = () => {
-    Alert.alert('Profile Photo', 'Choose an option', [
-      { text: 'Take Photo', onPress: () => void capturePhoto() },
-      { text: 'Choose from Device', onPress: () => void pickFromGallery() },
+    Alert.alert("Profile Photo", "Choose an option", [
+      { text: "Take Photo", onPress: () => void capturePhoto() },
+      { text: "Choose from Device", onPress: () => void pickFromGallery() },
       ...(avatarUri
         ? [
             {
-              text: 'Remove Photo',
-              style: 'destructive' as const,
+              text: "Remove Photo",
+              style: "destructive" as const,
               onPress: () => {
                 setAvatarUri(null);
                 void Haptics.selectionAsync();
@@ -178,7 +214,7 @@ export default function CounselorProfileScreen() {
             },
           ]
         : []),
-      { text: 'Cancel', style: 'cancel' },
+      { text: "Cancel", style: "cancel" },
     ]);
   };
 
@@ -186,7 +222,7 @@ export default function CounselorProfileScreen() {
     const trimmed = value.trim();
     if (!trimmed || qualifications.includes(trimmed)) return;
     setQualifications((current) => [...current, trimmed]);
-    setQualificationDraft('');
+    setQualificationDraft("");
     void Haptics.selectionAsync();
   };
 
@@ -194,7 +230,7 @@ export default function CounselorProfileScreen() {
     const trimmed = value.trim();
     if (!trimmed || researchStudies.includes(trimmed)) return;
     setResearchStudies((current) => [...current, trimmed]);
-    setResearchDraft('');
+    setResearchDraft("");
     void Haptics.selectionAsync();
   };
 
@@ -210,7 +246,7 @@ export default function CounselorProfileScreen() {
 
   const handleSave = () => {
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert('Profile Saved', 'Draft changes were saved.');
+    Alert.alert("Profile Saved", "Draft changes were saved.");
   };
 
   const handleUpdateProfile = () => {
@@ -219,17 +255,17 @@ export default function CounselorProfileScreen() {
 
     if (!normalizeSalutation(salutation)) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Missing Title', 'Please select Mr/Mrs/Ms before your name.');
+      Alert.alert("Missing Title", "Please select Mr/Mrs/Ms before your name.");
       return;
     }
     if (!normalizedName) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Missing Name', 'Please enter your full name.');
+      Alert.alert("Missing Name", "Please enter your full name.");
       return;
     }
     if (!specialty.trim()) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Select Specialty', 'Please select your specialty.');
+      Alert.alert("Select Specialty", "Please select your specialty.");
       return;
     }
 
@@ -238,7 +274,7 @@ export default function CounselorProfileScreen() {
 
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.replace({
-      pathname: '/counselor-dashboard',
+      pathname: "/counselor-dashboard",
       params: {
         name: displayName,
         specialty: specialty.trim(),
@@ -248,32 +284,37 @@ export default function CounselorProfileScreen() {
 
   const clearAllDetails = () => {
     setAvatarUri(null);
-    setSalutation('Mr');
-    setFullName('');
-    setSpecialty('');
+    setSalutation("Mr");
+    setShowSalutations(false);
+    setFullName("");
+    setSpecialty("");
     setShowSpecialties(false);
     setQualifications([]);
-    setQualificationDraft('');
+    setQualificationDraft("");
     setQualificationInputVisible(false);
     setResearchStudies([]);
-    setResearchDraft('');
+    setResearchDraft("");
     setResearchInputVisible(false);
-    setBio('');
+    setBio("");
   };
 
   const handleDiscardChanges = () => {
-    Alert.alert('Discard Changes?', 'This will remove all entered details. Do you want to continue?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Discard',
-        style: 'destructive',
-        onPress: () => {
-          clearAllDetails();
-          void Haptics.selectionAsync();
-          Alert.alert('Discarded', 'All entered details were removed.');
+    Alert.alert(
+      "Discard Changes?",
+      "This will remove all entered details. Do you want to continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Discard",
+          style: "destructive",
+          onPress: () => {
+            clearAllDetails();
+            void Haptics.selectionAsync();
+            Alert.alert("Discarded", "All entered details were removed.");
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   const bioCharacterCount = bio.length;
@@ -284,17 +325,32 @@ export default function CounselorProfileScreen() {
         <View style={styles.header}>
           <View style={styles.headerSpacer} />
           <Text style={styles.headerTitle}>EDIT PROFILE</Text>
-          <TouchableOpacity style={styles.saveButton} activeOpacity={0.8} onPress={handleSave}>
+          <TouchableOpacity
+            style={styles.saveButton}
+            activeOpacity={0.8}
+            onPress={handleSave}
+          >
             <Ionicons name="save" size={22} color="#111B2E" />
           </TouchableOpacity>
         </View>
         <View style={styles.headerDivider} />
 
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.avatarSection}>
             <View style={styles.avatarWrap}>
-              {avatarUri ? <Image source={{ uri: avatarUri }} style={styles.avatar} /> : <View style={styles.avatarPlaceholder} />}
-              <TouchableOpacity style={styles.cameraBadge} activeOpacity={0.85} onPress={handlePhotoAction}>
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.avatar} />
+              ) : (
+                <View style={styles.avatarPlaceholder} />
+              )}
+              <TouchableOpacity
+                style={styles.cameraBadge}
+                activeOpacity={0.85}
+                onPress={handlePhotoAction}
+              >
                 <Ionicons name="camera" size={18} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
@@ -304,9 +360,17 @@ export default function CounselorProfileScreen() {
             <Feather name="user" size={18} color="#7A8393" /> Full Name
           </Text>
           <View style={styles.nameCard}>
-            <View style={styles.salutationPill}>
+            <TouchableOpacity
+              style={styles.salutationPill}
+              activeOpacity={0.85}
+              onPress={() => {
+                setShowSalutations((prev) => !prev);
+                void Haptics.selectionAsync();
+              }}
+            >
               <Text style={styles.salutationText}>{salutation}</Text>
-            </View>
+              <Feather name="chevron-down" size={14} color="#6F7784" />
+            </TouchableOpacity>
             <TextInput
               style={styles.nameInput}
               value={fullName}
@@ -323,17 +387,26 @@ export default function CounselorProfileScreen() {
             style={styles.selectCard}
             activeOpacity={0.85}
             onPress={() => {
+              setShowSalutations(false);
               setShowSpecialties((prev) => !prev);
               void Haptics.selectionAsync();
-            }}>
+            }}
+          >
             <View style={styles.selectLeft}>
               <Ionicons
-                name={specialty ? 'checkmark-circle-outline' : 'ellipse-outline'}
+                name={
+                  specialty ? "checkmark-circle-outline" : "ellipse-outline"
+                }
                 size={24}
-                color={specialty ? '#2F88E8' : '#8A93A3'}
+                color={specialty ? "#2F88E8" : "#8A93A3"}
               />
-              <Text style={[styles.selectText, !specialty && styles.selectPlaceholder]}>
-                {specialty || 'Select specialty'}
+              <Text
+                style={[
+                  styles.selectText,
+                  !specialty && styles.selectPlaceholder,
+                ]}
+              >
+                {specialty || "Select specialty"}
               </Text>
             </View>
             <Feather name="chevron-down" size={24} color="#6F7784" />
@@ -349,7 +422,8 @@ export default function CounselorProfileScreen() {
                     setSpecialty(option);
                     setShowSpecialties(false);
                     void Haptics.selectionAsync();
-                  }}>
+                  }}
+                >
                   <Text style={styles.dropdownItemText}>{option}</Text>
                 </TouchableOpacity>
               ))}
@@ -357,14 +431,22 @@ export default function CounselorProfileScreen() {
           )}
 
           <Text style={styles.fieldLabel}>
-            <Ionicons name="shield-checkmark-outline" size={18} color="#7A8393" /> Qualifications
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={18}
+              color="#7A8393"
+            />{" "}
+            Qualifications
           </Text>
           {qualifications.length > 0 && (
             <View style={styles.chipsWrap}>
               {qualifications.map((item) => (
                 <View key={item} style={styles.chip}>
                   <Text style={styles.chipText}>{item}</Text>
-                  <TouchableOpacity activeOpacity={0.8} onPress={() => removeQualification(item)}>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => removeQualification(item)}
+                  >
                     <Feather name="x" size={18} color="#1D4E89" />
                   </TouchableOpacity>
                 </View>
@@ -377,7 +459,8 @@ export default function CounselorProfileScreen() {
             onPress={() => {
               setQualificationInputVisible(true);
               void Haptics.selectionAsync();
-            }}>
+            }}
+          >
             <Feather name="plus" size={22} color="#747E8C" />
             <Text style={styles.addText}>Add a certification...</Text>
           </TouchableOpacity>
@@ -393,13 +476,22 @@ export default function CounselorProfileScreen() {
                   onSubmitEditing={() => addQualification(qualificationDraft)}
                   returnKeyType="done"
                 />
-                <TouchableOpacity style={styles.entryAddButton} activeOpacity={0.85} onPress={() => addQualification(qualificationDraft)}>
+                <TouchableOpacity
+                  style={styles.entryAddButton}
+                  activeOpacity={0.85}
+                  onPress={() => addQualification(qualificationDraft)}
+                >
                   <Text style={styles.entryAddText}>Add</Text>
                 </TouchableOpacity>
               </View>
               <View style={styles.suggestionWrap}>
                 {qualificationSuggestions.map((item) => (
-                  <TouchableOpacity key={item} style={styles.suggestionChip} activeOpacity={0.85} onPress={() => addQualification(item)}>
+                  <TouchableOpacity
+                    key={item}
+                    style={styles.suggestionChip}
+                    activeOpacity={0.85}
+                    onPress={() => addQualification(item)}
+                  >
                     <Text style={styles.suggestionText}>{item}</Text>
                   </TouchableOpacity>
                 ))}
@@ -408,14 +500,22 @@ export default function CounselorProfileScreen() {
           )}
 
           <Text style={styles.fieldLabel}>
-            <Ionicons name="shield-checkmark-outline" size={18} color="#7A8393" /> Research Studies
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={18}
+              color="#7A8393"
+            />{" "}
+            Research Studies
           </Text>
           {researchStudies.length > 0 && (
             <View style={styles.chipsWrap}>
               {researchStudies.map((item) => (
                 <View key={item} style={styles.chip}>
                   <Text style={styles.chipText}>{item}</Text>
-                  <TouchableOpacity activeOpacity={0.8} onPress={() => removeResearchStudy(item)}>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => removeResearchStudy(item)}
+                  >
                     <Feather name="x" size={18} color="#1D4E89" />
                   </TouchableOpacity>
                 </View>
@@ -428,7 +528,8 @@ export default function CounselorProfileScreen() {
             onPress={() => {
               setResearchInputVisible(true);
               void Haptics.selectionAsync();
-            }}>
+            }}
+          >
             <Feather name="plus" size={22} color="#747E8C" />
             <Text style={styles.addText}>Add a Research Study...</Text>
           </TouchableOpacity>
@@ -444,13 +545,22 @@ export default function CounselorProfileScreen() {
                   onSubmitEditing={() => addResearchStudy(researchDraft)}
                   returnKeyType="done"
                 />
-                <TouchableOpacity style={styles.entryAddButton} activeOpacity={0.85} onPress={() => addResearchStudy(researchDraft)}>
+                <TouchableOpacity
+                  style={styles.entryAddButton}
+                  activeOpacity={0.85}
+                  onPress={() => addResearchStudy(researchDraft)}
+                >
                   <Text style={styles.entryAddText}>Add</Text>
                 </TouchableOpacity>
               </View>
               <View style={styles.suggestionWrap}>
                 {researchSuggestions.map((item) => (
-                  <TouchableOpacity key={item} style={styles.suggestionChip} activeOpacity={0.85} onPress={() => addResearchStudy(item)}>
+                  <TouchableOpacity
+                    key={item}
+                    style={styles.suggestionChip}
+                    activeOpacity={0.85}
+                    onPress={() => addResearchStudy(item)}
+                  >
                     <Text style={styles.suggestionText}>{item}</Text>
                   </TouchableOpacity>
                 ))}
@@ -459,7 +569,8 @@ export default function CounselorProfileScreen() {
           )}
 
           <Text style={styles.fieldLabel}>
-            <Ionicons name="document-text-outline" size={18} color="#7A8393" /> Professional Bio
+            <Ionicons name="document-text-outline" size={18} color="#7A8393" />{" "}
+            Professional Bio
           </Text>
           <View style={styles.bioCard}>
             <TextInput
@@ -475,19 +586,33 @@ export default function CounselorProfileScreen() {
               {bioCharacterCount} / {MAX_BIO_LENGTH}
             </Text>
           </View>
-          <Text style={styles.bioNote}>This bio will be visible to potential patients in the directory.</Text>
+          <Text style={styles.bioNote}>
+            This bio will be visible to potential patients in the directory.
+          </Text>
 
-          <TouchableOpacity style={styles.updateButton} activeOpacity={0.9} onPress={handleUpdateProfile}>
+          <TouchableOpacity
+            style={styles.updateButton}
+            activeOpacity={0.9}
+            onPress={handleUpdateProfile}
+          >
             <Text style={styles.updateText}>Update Profile</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.discardButton} activeOpacity={0.85} onPress={handleDiscardChanges}>
+          <TouchableOpacity
+            style={styles.discardButton}
+            activeOpacity={0.85}
+            onPress={handleDiscardChanges}
+          >
             <Text style={styles.discardText}>Discard Changes</Text>
           </TouchableOpacity>
         </ScrollView>
 
         <View style={styles.bottomBar}>
-          <TouchableOpacity style={styles.navItem} activeOpacity={0.85} onPress={() => router.replace('/counselor-dashboard')}>
-            <Feather name="grid" size={16} color="#8E969F" />
+          <TouchableOpacity
+            style={styles.navItem}
+            activeOpacity={0.85}
+            onPress={() => router.replace("/counselor-dashboard")}
+          >
+            <Feather name="grid" size={24} color="#7F8695" />
             <Text style={styles.navText}>Overview</Text>
           </TouchableOpacity>
 
@@ -496,22 +621,75 @@ export default function CounselorProfileScreen() {
             activeOpacity={0.85}
             onPress={() =>
               router.replace({
-                pathname: '/counselor-schedule',
+                pathname: "/counselor-schedule",
                 params: {
                   name: buildDisplayName(salutation, fullName),
                   specialty,
                 },
               })
-            }>
-            <Feather name="calendar" size={16} color="#8E969F" />
+            }
+          >
+            <Feather name="calendar" size={24} color="#7F8695" />
             <Text style={styles.navText}>Schedule</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.navItem} activeOpacity={0.85}>
-            <Feather name="user" size={16} color="#30353B" />
+            <Feather name="user" size={24} color="#2F88E8" />
             <Text style={styles.navActive}>My Profile</Text>
           </TouchableOpacity>
         </View>
+
+        <Modal
+          visible={showSalutations}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowSalutations(false)}
+        >
+          <Pressable
+            style={styles.salutationModalBackdrop}
+            onPress={() => setShowSalutations(false)}
+          >
+            <Pressable style={styles.salutationModalCard} onPress={() => {}}>
+              <Text style={styles.salutationModalTitle}>Select Title</Text>
+              <Text style={styles.salutationModalSubtitle}>
+                Choose your title
+              </Text>
+
+              {SALUTATIONS.map((item) => {
+                const isSelected = salutation === item;
+                return (
+                  <TouchableOpacity
+                    key={item}
+                    style={styles.salutationModalOption}
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      setSalutation(item);
+                      setShowSalutations(false);
+                      void Haptics.selectionAsync();
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.salutationModalOptionText,
+                        isSelected && styles.salutationModalOptionTextSelected,
+                      ]}
+                    >
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+
+              <TouchableOpacity
+                style={styles.salutationModalCancel}
+                activeOpacity={0.85}
+                onPress={() => setShowSalutations(false)}
+              >
+                <Text style={styles.salutationModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -520,38 +698,38 @@ export default function CounselorProfileScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F3F5F8',
+    backgroundColor: "#F3F5F8",
   },
   screen: {
     flex: 1,
-    backgroundColor: '#F3F5F8',
+    backgroundColor: "#F3F5F8",
   },
   header: {
     paddingHorizontal: 18,
     height: 64,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   headerSpacer: {
     width: 28,
   },
   headerTitle: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 18,
     lineHeight: 22,
-    color: '#131A2C',
-    fontWeight: '800',
+    color: "#131A2C",
+    fontWeight: "800",
   },
   saveButton: {
     width: 28,
     height: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   headerDivider: {
     height: 1,
-    backgroundColor: '#DEE2E9',
+    backgroundColor: "#DEE2E9",
   },
   content: {
     paddingHorizontal: 18,
@@ -560,7 +738,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   avatarSection: {
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 8,
     marginBottom: 4,
   },
@@ -573,230 +751,294 @@ const styles = StyleSheet.create({
     height: 170,
     borderRadius: 85,
     borderWidth: 3,
-    borderColor: '#F4F6FA',
+    borderColor: "#F4F6FA",
   },
   avatarPlaceholder: {
     width: 170,
     height: 170,
     borderRadius: 85,
     borderWidth: 2,
-    borderColor: '#D6DBE4',
-    backgroundColor: '#F3F5F8',
+    borderColor: "#D6DBE4",
+    backgroundColor: "#F3F5F8",
   },
   cameraBadge: {
-    position: 'absolute',
+    position: "absolute",
     right: 0,
     bottom: 10,
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#3A83EC',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#3A83EC",
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 4,
-    borderColor: '#F3F5F8',
+    borderColor: "#F3F5F8",
   },
   fieldLabel: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 14,
     lineHeight: 19,
-    color: '#6E7788',
-    fontWeight: '600',
-    flexDirection: 'row',
-    alignItems: 'center',
+    color: "#6E7788",
+    fontWeight: "600",
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   nameCard: {
     minHeight: 56,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#D6DBE4',
-    backgroundColor: '#F5F7FA',
+    borderColor: "#D6DBE4",
+    backgroundColor: "#F5F7FA",
     paddingHorizontal: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   salutationPill: {
     height: 38,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#D0D8E4',
-    backgroundColor: '#FFFFFF',
+    borderColor: "#D0D8E4",
+    backgroundColor: "#FFFFFF",
     paddingHorizontal: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
   },
   salutationText: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 13,
     lineHeight: 16,
-    color: '#354052',
-    fontWeight: '700',
+    color: "#354052",
+    fontWeight: "700",
   },
   nameInput: {
     flex: 1,
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 16,
     lineHeight: 22,
-    color: '#1F2735',
-    fontWeight: '600',
+    color: "#1F2735",
+    fontWeight: "600",
   },
   selectCard: {
     minHeight: 56,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#D6DBE4',
-    backgroundColor: '#F5F7FA',
+    borderColor: "#D6DBE4",
+    backgroundColor: "#F5F7FA",
     paddingHorizontal: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   selectLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
   selectText: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 16,
     lineHeight: 22,
-    color: '#1F2735',
-    fontWeight: '600',
+    color: "#1F2735",
+    fontWeight: "600",
   },
   selectPlaceholder: {
-    color: '#8A93A3',
-    fontWeight: '500',
+    color: "#8A93A3",
+    fontWeight: "500",
   },
   dropdownPanel: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#D6DBE4',
-    backgroundColor: '#FFFFFF',
-    overflow: 'hidden',
+    borderColor: "#D6DBE4",
+    backgroundColor: "#FFFFFF",
+    overflow: "hidden",
+  },
+  salutationModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(17, 27, 46, 0.35)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  salutationModalCard: {
+    width: "100%",
+    maxWidth: 340,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 14,
+  },
+  salutationModalTitle: {
+    fontFamily: "Inter",
+    fontSize: 18,
+    lineHeight: 22,
+    color: "#1A2231",
+    fontWeight: "800",
+  },
+  salutationModalSubtitle: {
+    marginTop: 4,
+    marginBottom: 12,
+    fontFamily: "Inter",
+    fontSize: 14,
+    lineHeight: 18,
+    color: "#6E7788",
+    fontWeight: "500",
+  },
+  salutationModalOption: {
+    minHeight: 44,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    justifyContent: "center",
+  },
+  salutationModalOptionText: {
+    fontFamily: "Inter",
+    fontSize: 15,
+    lineHeight: 20,
+    color: "#354052",
+    fontWeight: "600",
+  },
+  salutationModalOptionTextSelected: {
+    color: "#2F88E8",
+  },
+  salutationModalCancel: {
+    marginTop: 8,
+    minHeight: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#D6DBE4",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  salutationModalCancelText: {
+    fontFamily: "Inter",
+    fontSize: 14,
+    lineHeight: 18,
+    color: "#5E6777",
+    fontWeight: "600",
   },
   dropdownItem: {
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#EEF1F5',
+    borderBottomColor: "#EEF1F5",
   },
   dropdownItemText: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 14,
     lineHeight: 18,
-    color: '#354052',
-    fontWeight: '500',
+    color: "#354052",
+    fontWeight: "500",
   },
   chipsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
   },
   chip: {
     borderRadius: 999,
-    backgroundColor: '#E7F1FE',
+    backgroundColor: "#E7F1FE",
     borderWidth: 1,
-    borderColor: '#CFE2FB',
+    borderColor: "#CFE2FB",
     paddingHorizontal: 18,
     minHeight: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   chipText: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 14,
     lineHeight: 18,
-    color: '#1D4E89',
-    fontWeight: '500',
+    color: "#1D4E89",
+    fontWeight: "500",
   },
   addCard: {
     minHeight: 64,
     borderRadius: 18,
     borderWidth: 2,
-    borderColor: '#CBD2DD',
-    borderStyle: 'dashed',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "#CBD2DD",
+    borderStyle: "dashed",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 10,
-    backgroundColor: '#F4F6F9',
+    backgroundColor: "#F4F6F9",
   },
   addText: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 14,
     lineHeight: 18,
-    color: '#6F7785',
-    fontWeight: '500',
+    color: "#6F7785",
+    fontWeight: "500",
   },
   entryPanel: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#D7DEE8',
-    backgroundColor: '#FFFFFF',
+    borderColor: "#D7DEE8",
+    backgroundColor: "#FFFFFF",
     padding: 10,
     gap: 10,
   },
   entryInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   entryInput: {
     flex: 1,
     height: 42,
     borderWidth: 1,
-    borderColor: '#D7DEE8',
+    borderColor: "#D7DEE8",
     borderRadius: 12,
     paddingHorizontal: 12,
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 14,
     lineHeight: 18,
-    color: '#2D3748',
+    color: "#2D3748",
   },
   entryAddButton: {
     height: 42,
     borderRadius: 12,
-    backgroundColor: '#2F88E8',
+    backgroundColor: "#2F88E8",
     paddingHorizontal: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   entryAddText: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 13,
     lineHeight: 16,
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: "#FFFFFF",
+    fontWeight: "700",
   },
   suggestionWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
   suggestionChip: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#BDD8FA',
-    backgroundColor: '#F1F7FF',
+    borderColor: "#BDD8FA",
+    backgroundColor: "#F1F7FF",
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   suggestionText: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 12,
     lineHeight: 15,
-    color: '#2B6CB0',
-    fontWeight: '600',
+    color: "#2B6CB0",
+    fontWeight: "600",
   },
   bioCard: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#D6DBE4',
-    backgroundColor: '#F5F7FA',
+    borderColor: "#D6DBE4",
+    backgroundColor: "#F5F7FA",
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 10,
@@ -804,92 +1046,90 @@ const styles = StyleSheet.create({
   },
   bioInput: {
     minHeight: 116,
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 14,
     lineHeight: 22,
-    color: '#252D3A',
-    fontWeight: '400',
+    color: "#252D3A",
+    fontWeight: "400",
   },
   bioCounter: {
-    alignSelf: 'flex-end',
-    fontFamily: 'Inter',
+    alignSelf: "flex-end",
+    fontFamily: "Inter",
     fontSize: 12,
     lineHeight: 16,
-    color: '#758091',
-    fontWeight: '500',
+    color: "#758091",
+    fontWeight: "500",
   },
   bioNote: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 12,
     lineHeight: 18,
-    color: '#8A93A3',
-    fontWeight: '500',
+    color: "#8A93A3",
+    fontWeight: "500",
   },
   updateButton: {
     marginTop: 6,
     height: 60,
     borderRadius: 18,
-    backgroundColor: '#2F88E8',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#2F88E8',
+    backgroundColor: "#2F88E8",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#2F88E8",
     shadowOpacity: 0.25,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 5 },
     elevation: 4,
   },
   updateText: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 16,
     lineHeight: 20,
-    color: '#FFFFFF',
-    fontWeight: '800',
+    color: "#FFFFFF",
+    fontWeight: "800",
   },
   discardButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     minHeight: 64,
     marginBottom: 8,
   },
   discardText: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 15,
     lineHeight: 19,
-    color: '#E34B4B',
-    fontWeight: '500',
+    color: "#E34B4B",
+    fontWeight: "500",
   },
   bottomBar: {
-    position: 'absolute',
+    position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
-    height: 62,
+    height: 74,
     borderTopWidth: 1,
-    borderTopColor: '#ECECEC',
-    backgroundColor: '#FFFFFF',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingHorizontal: 6,
+    borderTopColor: "#D4DAE5",
+    backgroundColor: "#F5F8FC",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+    paddingHorizontal: 18,
   },
   navItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 3,
-    minWidth: 60,
+    alignItems: "center",
+    gap: 6,
   },
   navText: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 11,
     lineHeight: 14,
-    color: '#8E969F',
-    fontWeight: '500',
+    color: "#737C8C",
+    fontWeight: "600",
   },
   navActive: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 11,
     lineHeight: 14,
-    color: '#30353B',
-    fontWeight: '700',
+    color: "#2F88E8",
+    fontWeight: "700",
   },
 });
