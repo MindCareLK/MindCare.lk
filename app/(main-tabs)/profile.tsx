@@ -278,7 +278,7 @@ export default function ProfilePage() {
       onPress={() => router.push('/member-information-form')}
     >
       <Feather name="user-plus" size={16} color="#FFFFFF" />
-      <Text style={styles.primaryActionText}>Fill Personal Information</Text>
+      <Text style={styles.primaryActionText}>Add Personal Information</Text>
     </TouchableOpacity>
   ) : isEditing ? (
     <View style={styles.editActions}>
