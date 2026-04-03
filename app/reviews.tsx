@@ -85,7 +85,7 @@ export default function ReviewsPage() {
              </View>
           </View>
 
-          <Text style={styles.showingText}>Showing 12 reviews</Text>
+          <Text style={styles.showingText}>Showing 6 reviews</Text>
 
           {/* Review List */}
           {reviewsData.map(item => (
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
   reviewerName: { fontSize: 13, fontWeight: '700', color: '#1D2531' },
   starsRowSmall: { flexDirection: 'row', gap: 1 },
   reviewDate: { fontSize: 10, color: '#7D8795', marginTop: 2 },
-  reviewBody: { fontSize: 12, lineHeight: 18, color: '#4A5568' },
+  reviewBody: { fontSize: 12, lineHeight: 24, color: '#4A5568',margin:15},
   reviewFooter: { flexDirection: 'row', gap: 20, marginTop: 12, borderTopWidth: 1, borderTopColor: '#F7FAFC', paddingTop: 10 },
   footerAction: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   footerActionText: { fontSize: 11, color: '#626D7A', fontWeight: '600' },

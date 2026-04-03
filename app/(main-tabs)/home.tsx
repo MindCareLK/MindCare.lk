@@ -2,6 +2,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 
 type MoodOption = {
   id: 'happy' | 'calm' | 'manic' | 'angry' | 'sad';
@@ -182,9 +183,13 @@ export default function HomePage() {
             </View>
           ))}
 
-          <TouchableOpacity style={styles.moreButton} activeOpacity={0.88}>
-            <Text style={styles.moreButtonText}>Explore more articles</Text>
-          </TouchableOpacity>
+         <TouchableOpacity 
+            style={styles.moreButton} 
+            activeOpacity={0.88}
+           onPress={() => router.push('/articles' as any)}
+>
+  <Text style={styles.moreButtonText}>Explore more articles</Text>
+</TouchableOpacity>
         </ScrollView>
 
       </View>
