@@ -1,23 +1,39 @@
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-type DashboardParams = {
-  name?: string | string[];
-  specialty?: string | string[];
-};
-
-const toSingleValue = (value: string | string[] | undefined): string =>
-  typeof value === 'string' ? value : Array.isArray(value) ? value[0] ?? '' : '';
+import { getCounselorProfile } from '@/lib/counselors';
+import { auth } from '@/lib/firebase';
 
 export default function CounselorDashboardScreen() {
-  const params = useLocalSearchParams<DashboardParams>();
-  const counselorName = toSingleValue(params.name) || 'Counselor';
-  const specialty = toSingleValue(params.specialty) || 'General Counseling';
+  const [counselorName, setCounselorName] = useState('Counselor');
+  const [specialty, setSpecialty] = useState('General Counseling');
   const [isReminderSent, setIsReminderSent] = useState(false);
+
+  useEffect(() => {
+    const user = auth?.currentUser;
+
+    if (!user) {
+      router.replace('/counselor-login');
+      return;
+    }
+
+    const loadProfile = async () => {
+      const profile = await getCounselorProfile(user.uid);
+      if (!profile) {
+        router.replace('/counselor-profile');
+        return;
+      }
+
+      setCounselorName(profile.displayName || profile.fullName || user.displayName || 'Counselor');
+      setSpecialty(profile.specialty || 'General Counseling');
+    };
+
+    void loadProfile();
+  }, []);
 
   const sendReminder = (label: string) => {
     setIsReminderSent(true);

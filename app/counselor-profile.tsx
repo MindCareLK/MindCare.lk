@@ -1,8 +1,8 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
-import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
+import { router } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Image,
@@ -16,6 +16,9 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import { getCounselorProfile, upsertCounselorProfile } from "@/lib/counselors";
+import { auth } from "@/lib/firebase";
 
 const MAX_BIO_LENGTH = 500;
 
@@ -45,20 +48,7 @@ const COMMON_RESEARCH_STUDIES = [
   "Trauma Recovery Outcomes in Adolescents",
 ];
 
-type SearchParams = {
-  name?: string | string[];
-  email?: string | string[];
-  salutation?: string | string[];
-};
-
 const SALUTATIONS = ["Mr", "Mrs", "Ms"] as const;
-
-const toSingleValue = (value: string | string[] | undefined): string =>
-  typeof value === "string"
-    ? value
-    : Array.isArray(value)
-      ? (value[0] ?? "")
-      : "";
 
 const normalizeSalutation = (value: string): string => {
   const compactValue = value.replace(/\./g, "").trim().toLowerCase();
@@ -91,7 +81,7 @@ const buildDisplayName = (
   return finalName ? `${finalSalutation} ${finalName}` : finalSalutation;
 };
 
-const deriveNameFromEmail = (email: string): string => {
+const deriveNameFromEmail = (email: string) => {
   const localPart = email.split("@")[0] ?? "";
   if (!localPart) return "";
   return localPart
@@ -103,16 +93,11 @@ const deriveNameFromEmail = (email: string): string => {
 };
 
 export default function CounselorProfileScreen() {
-  const params = useLocalSearchParams<SearchParams>();
-  const rawName =
-    toSingleValue(params.name) ||
-    deriveNameFromEmail(toSingleValue(params.email));
-  const parsedInitialName = splitDisplayName(rawName);
-  const initialName = parsedInitialName.name;
-  const initialSalutation =
-    normalizeSalutation(toSingleValue(params.salutation)) ||
-    parsedInitialName.salutation ||
-    "Mr";
+  const currentUser = auth?.currentUser;
+  const fallbackName = deriveNameFromEmail(currentUser?.email ?? "");
+  const initialNameParts = splitDisplayName(currentUser?.displayName ?? fallbackName);
+  const initialName = initialNameParts.name;
+  const initialSalutation = initialNameParts.salutation || "Mr";
 
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [salutation, setSalutation] = useState(initialSalutation);
@@ -132,6 +117,46 @@ export default function CounselorProfileScreen() {
   const [researchDraft, setResearchDraft] = useState("");
 
   const [bio, setBio] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [initialSnapshot, setInitialSnapshot] = useState({
+    salutation: initialSalutation,
+    fullName: initialName,
+    specialty: "",
+    qualifications: [] as string[],
+    researchStudies: [] as string[],
+    bio: "",
+  });
+
+  useEffect(() => {
+    if (!currentUser) {
+      router.replace("/counselor-login");
+      return;
+    }
+
+    const hydrateProfile = async () => {
+      const profile = await getCounselorProfile(currentUser.uid);
+      if (!profile) {
+        return;
+      }
+
+      setSalutation(profile.salutation || initialSalutation);
+      setFullName(profile.fullName || initialName);
+      setSpecialty(profile.specialty || "");
+      setQualifications(profile.qualifications || []);
+      setResearchStudies(profile.researchStudies || []);
+      setBio(profile.bio || "");
+      setInitialSnapshot({
+        salutation: profile.salutation || initialSalutation,
+        fullName: profile.fullName || initialName,
+        specialty: profile.specialty || "",
+        qualifications: profile.qualifications || [],
+        researchStudies: profile.researchStudies || [],
+        bio: profile.bio || "",
+      });
+    };
+
+    void hydrateProfile();
+  }, [currentUser, initialName, initialSalutation]);
 
   const qualificationSuggestions = useMemo(() => {
     const normalizedDraft = qualificationDraft.trim().toLowerCase();
@@ -244,12 +269,7 @@ export default function CounselorProfileScreen() {
     void Haptics.selectionAsync();
   };
 
-  const handleSave = () => {
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert("Profile Saved", "Draft changes were saved.");
-  };
-
-  const handleUpdateProfile = () => {
+  const saveProfile = async (navigateToDashboard: boolean) => {
     const parsedName = splitDisplayName(fullName);
     const normalizedName = parsedName.name.trim();
 
@@ -269,33 +289,76 @@ export default function CounselorProfileScreen() {
       return;
     }
 
-    const displayName = buildDisplayName(salutation, normalizedName);
-    setFullName(normalizedName);
+    if (!currentUser) {
+      Alert.alert("Session Expired", "Please sign in again.");
+      router.replace("/counselor-login");
+      return;
+    }
 
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.replace({
-      pathname: "/counselor-dashboard",
-      params: {
-        name: displayName,
+    try {
+      setIsSaving(true);
+      const savedProfile = await upsertCounselorProfile(currentUser.uid, {
+        salutation: normalizeSalutation(salutation) || "Mr",
+        fullName: normalizedName,
         specialty: specialty.trim(),
-      },
-    });
+        qualifications,
+        researchStudies,
+        bio: bio.trim(),
+      });
+
+      setFullName(savedProfile.fullName);
+      setInitialSnapshot({
+        salutation: savedProfile.salutation,
+        fullName: savedProfile.fullName,
+        specialty: savedProfile.specialty,
+        qualifications: savedProfile.qualifications,
+        researchStudies: savedProfile.researchStudies,
+        bio: savedProfile.bio,
+      });
+
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      if (navigateToDashboard) {
+        router.replace("/counselor-dashboard");
+        return;
+      }
+
+      Alert.alert("Profile Saved", "Your counselor profile was saved to Firebase.");
+    } catch (error) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Save Failed",
+        error instanceof Error && error.message
+          ? error.message
+          : "Unable to save your profile right now."
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSave = () => {
+    void saveProfile(false);
+  };
+
+  const handleUpdateProfile = () => {
+    void saveProfile(true);
   };
 
   const clearAllDetails = () => {
     setAvatarUri(null);
-    setSalutation("Mr");
+    setSalutation(initialSnapshot.salutation);
     setShowSalutations(false);
-    setFullName("");
-    setSpecialty("");
+    setFullName(initialSnapshot.fullName);
+    setSpecialty(initialSnapshot.specialty);
     setShowSpecialties(false);
-    setQualifications([]);
+    setQualifications(initialSnapshot.qualifications);
     setQualificationDraft("");
     setQualificationInputVisible(false);
-    setResearchStudies([]);
+    setResearchStudies(initialSnapshot.researchStudies);
     setResearchDraft("");
     setResearchInputVisible(false);
-    setBio("");
+    setBio(initialSnapshot.bio);
   };
 
   const handleDiscardChanges = () => {
@@ -326,9 +389,10 @@ export default function CounselorProfileScreen() {
           <View style={styles.headerSpacer} />
           <Text style={styles.headerTitle}>EDIT PROFILE</Text>
           <TouchableOpacity
-            style={styles.saveButton}
+            style={[styles.saveButton, isSaving && styles.disabledAction]}
             activeOpacity={0.8}
             onPress={handleSave}
+            disabled={isSaving}
           >
             <Ionicons name="save" size={22} color="#111B2E" />
           </TouchableOpacity>
@@ -591,11 +655,14 @@ export default function CounselorProfileScreen() {
           </Text>
 
           <TouchableOpacity
-            style={styles.updateButton}
+            style={[styles.updateButton, isSaving && styles.disabledAction]}
             activeOpacity={0.9}
             onPress={handleUpdateProfile}
+            disabled={isSaving}
           >
-            <Text style={styles.updateText}>Update Profile</Text>
+            <Text style={styles.updateText}>
+              {isSaving ? "Saving..." : "Update Profile"}
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.discardButton}
@@ -726,6 +793,9 @@ const styles = StyleSheet.create({
     height: 28,
     justifyContent: "center",
     alignItems: "center",
+  },
+  disabledAction: {
+    opacity: 0.6,
   },
   headerDivider: {
     height: 1,

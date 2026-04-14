@@ -1,0 +1,187 @@
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { collection, doc, getDoc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
+
+import { auth, db, getFirebaseConfigError } from '@/lib/firebase';
+
+export type CounselorProfile = {
+  uid: string;
+  email: string;
+  salutation: string;
+  fullName: string;
+  displayName: string;
+  specialty: string;
+  qualifications: string[];
+  researchStudies: string[];
+  bio: string;
+  role: 'counselor';
+  profileCompleted: boolean;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
+
+type CounselorSignupInput = {
+  salutation: string;
+  fullName: string;
+  email: string;
+  password: string;
+};
+
+type CounselorProfileUpdateInput = {
+  salutation: string;
+  fullName: string;
+  specialty: string;
+  qualifications: string[];
+  researchStudies: string[];
+  bio: string;
+};
+
+const counselorCollection = () => {
+  if (!db) {
+    throw new Error(getFirebaseConfigError() ?? 'Firestore is unavailable.');
+  }
+
+  return collection(db, 'counselors');
+};
+
+const counselorDocRef = (uid: string) => {
+  if (!db) {
+    throw new Error(getFirebaseConfigError() ?? 'Firestore is unavailable.');
+  }
+
+  return doc(db, 'counselors', uid);
+};
+
+const buildDisplayName = (salutation: string, fullName: string) =>
+  `${salutation.trim()} ${fullName.trim()}`.trim();
+
+export async function createCounselorAccount(input: CounselorSignupInput) {
+  if (!auth) {
+    throw new Error(getFirebaseConfigError() ?? 'Firebase Auth is unavailable.');
+  }
+
+  const credential = await createUserWithEmailAndPassword(auth, input.email, input.password);
+  const displayName = buildDisplayName(input.salutation, input.fullName);
+
+  await updateProfile(credential.user, { displayName });
+
+  const counselorProfile: CounselorProfile = {
+    uid: credential.user.uid,
+    email: input.email,
+    salutation: input.salutation,
+    fullName: input.fullName,
+    displayName,
+    specialty: '',
+    qualifications: [],
+    researchStudies: [],
+    bio: '',
+    role: 'counselor',
+    profileCompleted: false,
+  };
+
+  await setDoc(counselorDocRef(credential.user.uid), {
+    ...counselorProfile,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  return counselorProfile;
+}
+
+export async function signInCounselor(email: string, password: string) {
+  if (!auth) {
+    throw new Error(getFirebaseConfigError() ?? 'Firebase Auth is unavailable.');
+  }
+
+  const credential = await signInWithEmailAndPassword(auth, email, password);
+  const existingProfile = await getCounselorProfile(credential.user.uid);
+
+  if (existingProfile) {
+    return existingProfile;
+  }
+
+  const fallbackFullName = credential.user.displayName?.replace(/^(Mr|Mrs|Ms)\s+/i, '').trim() || '';
+  const fallbackSalutation = credential.user.displayName?.match(/^(Mr|Mrs|Ms)\b/i)?.[1] ?? 'Mr';
+  const createdProfile: CounselorProfile = {
+    uid: credential.user.uid,
+    email: credential.user.email ?? email,
+    salutation: fallbackSalutation,
+    fullName: fallbackFullName,
+    displayName: credential.user.displayName ?? buildDisplayName(fallbackSalutation, fallbackFullName),
+    specialty: '',
+    qualifications: [],
+    researchStudies: [],
+    bio: '',
+    role: 'counselor',
+    profileCompleted: false,
+  };
+
+  await setDoc(counselorDocRef(credential.user.uid), {
+    ...createdProfile,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  return createdProfile;
+}
+
+export async function getCounselorProfile(uid: string) {
+  const snapshot = await getDoc(counselorDocRef(uid));
+  if (!snapshot.exists()) {
+    return null;
+  }
+
+  return snapshot.data() as CounselorProfile;
+}
+
+export async function upsertCounselorProfile(uid: string, input: CounselorProfileUpdateInput) {
+  const existingProfile = await getCounselorProfile(uid);
+  const currentEmail = auth?.currentUser?.email ?? existingProfile?.email ?? '';
+  const displayName = buildDisplayName(input.salutation, input.fullName);
+
+  await setDoc(
+    counselorDocRef(uid),
+    {
+      uid,
+      email: currentEmail,
+      salutation: input.salutation,
+      fullName: input.fullName,
+      displayName,
+      specialty: input.specialty,
+      qualifications: input.qualifications,
+      researchStudies: input.researchStudies,
+      bio: input.bio,
+      role: 'counselor',
+      profileCompleted: true,
+      updatedAt: serverTimestamp(),
+      createdAt: existingProfile?.createdAt ?? serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  if (auth?.currentUser) {
+    await updateProfile(auth.currentUser, { displayName });
+  }
+
+  return {
+    uid,
+    email: currentEmail,
+    salutation: input.salutation,
+    fullName: input.fullName,
+    displayName,
+    specialty: input.specialty,
+    qualifications: input.qualifications,
+    researchStudies: input.researchStudies,
+    bio: input.bio,
+    role: 'counselor' as const,
+    profileCompleted: true,
+  };
+}
+
+export async function listCounselors() {
+  const snapshot = await getDocs(counselorCollection());
+
+  return snapshot.docs
+    .map((item) => item.data() as CounselorProfile)
+    .filter((item) => item.role === 'counselor' && item.profileCompleted)
+    .filter((item) => item.fullName.trim() && item.specialty.trim());
+}

@@ -5,6 +5,9 @@ import { useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
+import { createCounselorAccount } from '@/lib/counselors';
+import { getFirebaseConfigError } from '@/lib/firebase';
+
 const SALUTATION_OPTIONS = ['Mr', 'Mrs', 'Ms'] as const;
 
 export default function CounselorRegisterScreen() {
@@ -15,6 +18,7 @@ export default function CounselorRegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSelectSalutation = () => {
     void Haptics.selectionAsync();
@@ -35,10 +39,16 @@ export default function CounselorRegisterScreen() {
     );
   };
 
-  const handleSignUp = () => {
+  const handleSignUp = async () => {
     const trimmedSalutation = salutation.trim();
     const trimmedName = fullName.trim();
-    const trimmedEmail = emailAddress.trim();
+    const trimmedEmail = emailAddress.trim().toLowerCase();
+    const firebaseConfigError = getFirebaseConfigError();
+
+    if (firebaseConfigError) {
+      Alert.alert('Firebase Not Configured', firebaseConfigError);
+      return;
+    }
 
     if (!trimmedSalutation || !trimmedName || !trimmedEmail || !password || !confirmPassword) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -64,15 +74,35 @@ export default function CounselorRegisterScreen() {
       return;
     }
 
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.replace({
-      pathname: '/counselor-profile',
-      params: {
-        name: trimmedName,
-        email: trimmedEmail,
+    try {
+      setIsSubmitting(true);
+      await createCounselorAccount({
         salutation: trimmedSalutation,
-      },
-    });
+        fullName: trimmedName,
+        email: trimmedEmail,
+        password,
+      });
+
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace('/counselor-profile');
+    } catch (error) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+
+      const message =
+        error instanceof Error && error.message
+          ? error.message.includes('auth/email-already-in-use')
+            ? 'That email is already registered.'
+            : error.message.includes('auth/invalid-email')
+              ? 'Please enter a valid email address.'
+              : error.message.includes('auth/network-request-failed')
+                ? 'Network error while contacting Firebase.'
+                : error.message
+          : 'Unable to create your counselor account right now.';
+
+      Alert.alert('Sign Up Failed', message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleSignIn = () => {
@@ -166,8 +196,12 @@ export default function CounselorRegisterScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.signUpButton} activeOpacity={0.9} onPress={handleSignUp}>
-              <Text style={styles.signUpText}>Sign Up</Text>
+            <TouchableOpacity
+              style={[styles.signUpButton, isSubmitting && styles.signUpButtonDisabled]}
+              activeOpacity={0.9}
+              onPress={() => void handleSignUp()}
+              disabled={isSubmitting}>
+              <Text style={styles.signUpText}>{isSubmitting ? 'Creating Account...' : 'Sign Up'}</Text>
             </TouchableOpacity>
 
             <View style={styles.signInRow}>
@@ -282,6 +316,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#2F88E8',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  signUpButtonDisabled: {
+    opacity: 0.7,
   },
   signUpText: {
     fontFamily: 'Inter',

@@ -18,12 +18,11 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="(main-tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="member-login" options={{ headerShown: false }} />
-        <Stack.Screen name="counselor-login" options={{ headerShown: false }} />
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="(main-tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="member-login" options={{ headerShown: false }} />
+          <Stack.Screen name="counselor-login" options={{ headerShown: false }} />
         <Stack.Screen name="articles" options={{ headerShown: false }} />
         <Stack.Screen
           name="counselor-register"

@@ -3,12 +3,16 @@ import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+
+import { signInCounselor } from '@/lib/counselors';
+import { getFirebaseConfigError } from '@/lib/firebase';
 
 export default function LoginScreen() {
   const [emailAddress, setEmailAddress] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const canSignIn = emailAddress.trim().length > 4 && password.trim().length >= 8;
 
   const handleBack = () => {
@@ -16,27 +20,42 @@ export default function LoginScreen() {
     router.back();
   };
 
-  const handleSignIn = () => {
+  const handleSignIn = async () => {
     if (!canSignIn) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
 
-    const derivedName = (emailAddress.trim().split('@')[0] ?? '')
-      .replace(/[._-]+/g, ' ')
-      .split(' ')
-      .filter(Boolean)
-      .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
-      .join(' ');
+    const firebaseConfigError = getFirebaseConfigError();
+    if (firebaseConfigError) {
+      Alert.alert('Firebase Not Configured', firebaseConfigError);
+      return;
+    }
 
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.replace({
-      pathname: '/counselor-dashboard',
-      params: {
-        name: derivedName ? `Mr ${derivedName}` : 'Counselor',
-        specialty: 'General Counseling',
-      },
-    });
+    try {
+      setIsSubmitting(true);
+      const profile = await signInCounselor(emailAddress.trim().toLowerCase(), password);
+
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace(profile.profileCompleted ? '/counselor-dashboard' : '/counselor-profile');
+    } catch (error) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+
+      const message =
+        error instanceof Error && error.message
+          ? error.message.includes('auth/invalid-credential') || error.message.includes('auth/wrong-password')
+            ? 'Incorrect email or password.'
+            : error.message.includes('auth/user-not-found')
+              ? 'No counselor account exists for that email.'
+              : error.message.includes('auth/network-request-failed')
+                ? 'Network error while contacting Firebase.'
+                : error.message
+          : 'Unable to sign in right now.';
+
+      Alert.alert('Sign In Failed', message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleSocialPress = () => {
@@ -101,11 +120,11 @@ export default function LoginScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.signInButton, !canSignIn && styles.signInButtonDisabled]}
+            style={[styles.signInButton, (!canSignIn || isSubmitting) && styles.signInButtonDisabled]}
             activeOpacity={0.9}
-            onPress={handleSignIn}
-            disabled={!canSignIn}>
-            <Text style={styles.signInText}>Sign In</Text>
+            onPress={() => void handleSignIn()}
+            disabled={!canSignIn || isSubmitting}>
+            <Text style={styles.signInText}>{isSubmitting ? 'Signing In...' : 'Sign In'}</Text>
           </TouchableOpacity>
 
           <View style={styles.dividerWrap}>
