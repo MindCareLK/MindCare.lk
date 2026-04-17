@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { useAuthContext } from '@/components/AuthContext';
 
 type MoodOption = {
   id: 'happy' | 'calm' | 'manic' | 'angry' | 'sad';
@@ -81,18 +83,66 @@ const reads: ReadCard[] = [
   },
 ];
 
+function getFirstName(value: string) {
+  const cleaned = value.trim();
+  if (!cleaned) {
+    return '';
+  }
+
+  return cleaned.split(' ')[0];
+}
+
+function deriveGreetingName(name?: string, displayNameOrEmail?: string) {
+  const fromName = getFirstName(name ?? '');
+  if (fromName) {
+    return fromName;
+  }
+
+  const fallback = (displayNameOrEmail ?? '').trim();
+  if (!fallback) {
+    return 'there';
+  }
+
+  if (fallback.includes('@')) {
+    const fromEmail = fallback.split('@')[0]?.replace(/[._-]+/g, ' ') ?? '';
+    return getFirstName(fromEmail) || 'there';
+  }
+
+  return getFirstName(fallback) || 'there';
+}
+
+function getTimeBasedGreeting(now: Date = new Date()) {
+  const hour = now.getHours();
+
+  if (hour < 12) {
+    return 'Good Morning';
+  }
+
+  if (hour < 18) {
+    return 'Good Afternoon';
+  }
+
+  return 'Good Evening';
+}
+
 export default function HomePage() {
+  const { currentUser, memberProfile } = useAuthContext();
   const [selectedMood, setSelectedMood] = useState<MoodOption['id']>('happy');
+  const greetingPrefix = getTimeBasedGreeting();
+  const greetingName = deriveGreetingName(
+    memberProfile.name,
+    currentUser?.displayName ?? memberProfile.email ?? currentUser?.email,
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <StatusBar style="dark" backgroundColor="#FFFFFF" translucent={false} />
       <View style={styles.container}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.hero}>
             <View style={styles.heroBlob} />
-            <Text style={styles.heroTitle}>
-              Good{'\n'}Morning !
-            </Text>
+            <Text style={styles.heroGreeting}>{greetingPrefix},</Text>
+            <Text style={styles.heroName}>{greetingName}!</Text>
           </View>
 
           <View style={styles.moodSection}>
@@ -160,7 +210,12 @@ export default function HomePage() {
           <Text style={styles.readsTitle}>Mindful Reads</Text>
 
           {reads.map((item) => (
-            <View style={styles.readCard} key={item.id}>
+            <TouchableOpacity 
+              style={styles.readCard} 
+              key={item.id}
+              activeOpacity={0.85}
+              onPress={() => router.push(`/article-detail?id=${item.id}` as any)}
+            >
               <View style={styles.readImageWrap}>
                 <Image source={{ uri: item.image }} style={styles.readImage} />
                 <View style={styles.categoryTag}>
@@ -180,13 +235,13 @@ export default function HomePage() {
                   <Text style={styles.metaText}>{item.minutes}</Text>
                 </View>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
 
          <TouchableOpacity 
             style={styles.moreButton} 
             activeOpacity={0.88}
-           onPress={() => router.push('/articles' as any)}
+           onPress={() => router.push('/(main-tabs)/articles' as any)}
 >
   <Text style={styles.moreButtonText}>Explore more articles</Text>
 </TouchableOpacity>
@@ -229,11 +284,19 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 0,
     backgroundColor: '#0E97F0',
   },
-  heroTitle: {
+  heroGreeting: {
     marginTop: 12,
     fontFamily: 'Inter',
-    fontSize: 26,
-    lineHeight: 28,
+    fontSize: 22,
+    lineHeight: 26,
+    color: '#3B4450',
+    fontWeight: '700',
+  },
+  heroName: {
+    marginTop: 2,
+    fontFamily: 'Inter',
+    fontSize: 30,
+    lineHeight: 34,
     color: '#171717',
     fontWeight: '800',
   },

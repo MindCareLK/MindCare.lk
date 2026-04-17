@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 
 import { CounselorProfile, listCounselors } from '@/lib/counselors';
 
@@ -27,6 +28,7 @@ export default function CounselorsPage() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <StatusBar style="dark" backgroundColor="#F1F4F7" translucent={false} />
       <View style={styles.container}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.headerRow}>
@@ -140,7 +142,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 12,
-    paddingTop: 8,
+    paddingTop: 20,
     paddingBottom: 86,
     gap: 10,
   },
@@ -155,10 +157,12 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: 'Inter',
-    fontSize: 12,
+    fontSize: 11,
     lineHeight: 15,
     color: '#343D4A',
     fontWeight: '800',
+    flex: 1,
+    textAlign: 'center',
   },
   headerFilter: {
     width: 18,

@@ -1,6 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -41,11 +42,12 @@ export default function RoleSelectionScreen() {
       return;
     }
 
-    router.push('/member-register');
+    router.push('/(main-tabs)/home');
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <StatusBar style="light" backgroundColor="#2F88E8" translucent={false} />
       <View style={styles.container}>
         <View pointerEvents="none" style={styles.topGlow} />
         <View pointerEvents="none" style={styles.bottomGlow} />

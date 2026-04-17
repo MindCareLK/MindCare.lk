@@ -1,13 +1,15 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useState } from 'react';
 
 const articleList = [
   {
     id: '1',
     category: 'POPULAR SERIES',
-    title: 'Understanding Mindfulness: A Beginner’s Path to Inner Peace',
+    title: "Understanding Mindfulness: A Beginner's Path to Inner Peace",
     description: 'Discover practical techniques to rewire your brain for resilience.',
     author: 'Dr. Sarah Chen',
     role: 'Clinical Psychologist',
@@ -16,57 +18,79 @@ const articleList = [
     tagColor: '#2F88E8',
   },
   {
-    id: '1',
-    category: 'POPULAR SERIES',
-    title: 'Understanding Mindfulness: A Beginner’s Path to Inner Peace',
-    description: 'Discover practical techniques to rewire your brain for resilience.',
-    author: 'Dr. Sarah Chen',
-    role: 'Clinical Psychologist',
-    minutes: '5-8 MIN READ',
-    image: 'https://images.unsplash.com/photo-1495195134817-aeb325a55b65?auto=format&fit=crop&w=1200&q=80',
-    tagColor: '#2F88E8',
+    id: '2',
+    category: 'MINDFULNESS',
+    title: 'Finding Stillness in a Chaotic Digital World',
+    description: 'Learn techniques to find peace amidst digital chaos.',
+    author: 'Uthoja Kumara',
+    role: 'Mindfulness Coach',
+    minutes: '6 MIN READ',
+    image: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1200&q=80',
+    tagColor: '#7AD6D9',
   },
    {
-    id: '1',
-    category: 'POPULAR SERIES',
-    title: 'Understanding Mindfulness: A Beginner’s Path to Inner Peace',
-    description: 'Discover practical techniques to rewire your brain for resilience.',
-    author: 'Dr. Sarah Chen',
-    role: 'Clinical Psychologist',
-    minutes: '5-8 MIN READ',
-    image: 'https://images.unsplash.com/photo-1495195134817-aeb325a55b65?auto=format&fit=crop&w=1200&q=80',
-    tagColor: '#2F88E8',
+    id: '3',
+    category: 'WELLNESS',
+    title: 'Understanding Sleep Hygiene for Better Mental Health',
+    description: 'Sleep quality directly impacts your mental wellbeing.',
+    author: 'Saman Bandara',
+    role: 'Sleep Specialist',
+    minutes: '7 MIN READ',
+    image: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80',
+    tagColor: '#A7D87D',
   },
    {
-    id: '1',
-    category: 'POPULAR SERIES',
-    title: 'Understanding Mindfulness: A Beginner’s Path to Inner Peace',
-    description: 'Discover practical techniques to rewire your brain for resilience.',
-    author: 'Dr. Sarah Chen',
-    role: 'Clinical Psychologist',
-    minutes: '5-8 MIN READ',
-    image: 'https://images.unsplash.com/photo-1495195134817-aeb325a55b65?auto=format&fit=crop&w=1200&q=80',
-    tagColor: '#2F88E8',
+    id: '4',
+    category: 'NEUROSCIENCE',
+    title: 'The Power of Gratitude: How to Rewire Your Brain',
+    description: 'Discover how gratitude can transform your neural pathways.',
+    author: 'Dr. Michael Lee',
+    role: 'Neuroscience Researcher',
+    minutes: '5 MIN READ',
+    image: 'https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?auto=format&fit=crop&w=1200&q=80',
+    tagColor: '#F1A345',
   },
 ];
 
 export default function DiscoverArticlesPage() {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredArticles = articleList.filter((article) =>
+    article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    article.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    article.category.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <SafeAreaView style={styles.safeArea}>
+      <StatusBar style="dark" backgroundColor="#FFFFFF" translucent={false} />
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Feather name="arrow-left" size={20} color="#333" />
-            <Text style={styles.backText}>Back</Text>
-          </TouchableOpacity>
           <Text style={styles.pageTitle}>Discover Articles</Text>
           <Text style={styles.pageSubtitle}>Choose an article to read and explore</Text>
         </View>
 
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <Feather name="search" size={18} color="#999" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search articles..."
+            placeholderTextColor="#CCC"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          {articleList.map((item) => (
-            <View key={item.id} style={styles.articleCard}>
+          {filteredArticles.map((item) => (
+            <TouchableOpacity 
+              key={item.id} 
+              style={styles.articleCard}
+              activeOpacity={0.8}
+              onPress={() => router.push(`/article-detail?id=${item.id}` as any)}
+            >
               <View style={styles.imageWrap}>
                 <Image source={{ uri: item.image }} style={styles.articleImage} />
                 <View style={styles.badgeRow}>
@@ -94,34 +118,17 @@ export default function DiscoverArticlesPage() {
                       <Text style={styles.authorRole}>{item.role}</Text>
                     </View>
                   </View>
-                  <TouchableOpacity style={styles.readBtn}>
+                  <TouchableOpacity 
+                    style={styles.readBtn}
+                    onPress={() => router.push(`/article-detail?id=${item.id}` as any)}
+                  >
                     <Text style={styles.readText}>Read →</Text>
                   </TouchableOpacity>
                 </View>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </ScrollView>
-
-        {/* Bottom Navigation */}
-        <View style={styles.bottomBar}>
-                  <TouchableOpacity style={styles.navItem} activeOpacity={0.85} onPress={() => router.replace('/home')}>
-                    <Feather name="home" size={16} color="#8E969F" />
-                    <Text style={styles.navText}>Home</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.navItem} activeOpacity={0.85} onPress={() => router.replace('/ai-chat')}>
-                    <Feather name="message-square" size={16} color="#8E969F" />
-                    <Text style={styles.navText}>Chat</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.navItem} activeOpacity={0.85} onPress={() => router.replace('/counselors')}>
-                    <Feather name="users" size={16} color="#30353B" />
-                    <Text style={styles.navActive}>Counselors</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.navItem} activeOpacity={0.85} onPress={() => router.replace('./profile')}>
-                    <Feather name="user" size={16} color="#8E969F" />
-                    <Text style={styles.navText}>Profile</Text>
-                  </TouchableOpacity>
-                </View>
       </View>
     </SafeAreaView>
   );
@@ -131,10 +138,11 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
   container: { flex: 1 },
   header: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 15 },
-  backBtn: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  backText: { marginLeft: 5, fontSize: 14, color: '#333', fontWeight: '600' },
   pageTitle: { fontSize: 28, fontWeight: '800', color: '#1A1A1A' },
   pageSubtitle: { fontSize: 14, color: '#666', marginTop: 5 },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, marginBottom: 15, backgroundColor: '#F5F5F5', borderRadius: 12, paddingHorizontal: 12, height: 44 },
+  searchIcon: { marginRight: 8 },
+  searchInput: { flex: 1, fontSize: 14, color: '#333', fontFamily: 'Inter' },
   content: { paddingHorizontal: 20, paddingBottom: 100 },
   articleCard: { 
     backgroundColor: '#FFF', 
@@ -167,20 +175,4 @@ const styles = StyleSheet.create({
   authorRole: { fontSize: 10, color: '#999' },
   readBtn: { paddingVertical: 5 },
   readText: { color: '#2F88E8', fontSize: 12, fontWeight: '700' },
-  bottomBar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 65,
-    borderTopWidth: 1,
-    borderTopColor: '#D8DFE7',
-    backgroundColor: '#F4F7FB',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-  },
-  navItem: { alignItems: 'center', gap: 3 },
-  navActive: { fontSize: 10, color: '#2F88E8', fontWeight: '700' },
-  navText: { fontSize: 10, color: '#97A0AB', fontWeight: '600' },
 });

@@ -53,7 +53,12 @@ export default function RootLayout() {
         />
       </Stack>
       </AuthProvider>
-      <StatusBar style="auto" />
+      <StatusBar
+        style="dark"
+        translucent={false}
+        backgroundColor="#FFFFFF"
+        hidden={false}
+      />
     </ThemeProvider>
   );
 }
