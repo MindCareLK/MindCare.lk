@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "MindCare.lk",
-    "slug": "myApp",
+    "slug": "MindCareLK",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.tharushatheekshana.myApp",
+      "bundleIdentifier": "com.tharushatheekshana.MindCareLK",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -24,7 +24,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.tharushatheekshana.myApp"
+      "package": "com.tharushatheekshana.MindCareLK"
     },
     "web": {
       "output": "static",
@@ -43,7 +43,8 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

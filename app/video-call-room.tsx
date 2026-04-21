@@ -22,7 +22,7 @@ export default function VideoCallRoomScreen() {
   const handleEndCall = () => {
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     router.replace({
-      pathname: '/counselor-dashboard',
+      pathname: '/(counselor-tabs)/overview',
       params: { name: counselorName, specialty },
     });
   };

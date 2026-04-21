@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { addCounselorNotification } from '@/components/notification-store';
 import { addBookedSession } from '@/components/session-store';
 
 type ConsultationMode = 'video' | 'voice';
@@ -120,14 +121,23 @@ export default function ScheduleSessionPage() {
   };
 
   const handleConfirmBooking = () => {
+    const summaryDate = formatSummaryDate(selectedDateObject);
+
     addBookedSession({
       id: `session-${Date.now()}`,
       doctor: counselorName,
       specialty: counselorTitle,
-      date: formatSummaryDate(selectedDateObject),
+      date: summaryDate,
       time: selectedSlot,
       status: 'Upcoming',
       actions: true,
+    });
+
+    addCounselorNotification({
+      counselorName,
+      type: 'booking',
+      title: 'New session booked',
+      message: `A patient booked a session for ${summaryDate} at ${selectedSlot}.`,
     });
 
     router.replace('/(main-tabs)/profile');

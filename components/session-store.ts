@@ -10,36 +10,7 @@ export type BookedSession = {
   actions?: boolean;
 };
 
-const initialSessions: BookedSession[] = [
-  {
-    id: 'sarah',
-    doctor: 'Dr. Sarah Johnson',
-    specialty: 'Cognitive Behavioral Therapy',
-    date: 'March 15, 2026',
-    time: '2:00 PM - 3:00 PM',
-    status: 'Upcoming',
-    actions: true,
-  },
-  {
-    id: 'michael',
-    doctor: 'Dr. Michael Chen',
-    specialty: 'General Consultation',
-    date: 'March 12, 2026',
-    time: '10:00 AM - 11:00 AM',
-    status: 'Completed',
-  },
-  {
-    id: 'emily',
-    doctor: 'Dr. Emily Williams',
-    specialty: 'Anxiety Management',
-    date: 'March 22, 2026',
-    time: '4:00 PM - 5:00 PM',
-    status: 'Upcoming',
-    actions: true,
-  },
-];
-
-let sessions = initialSessions;
+let sessions: BookedSession[] = [];
 const listeners = new Set<() => void>();
 
 function emitChange() {

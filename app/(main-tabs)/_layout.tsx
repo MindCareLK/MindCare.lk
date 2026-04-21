@@ -7,22 +7,23 @@ export default function MainTabsLayout() {
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: {
-          height: 62,
+          height: 85,
           borderTopWidth: 1,
           borderTopColor: '#ECECEC',
           backgroundColor: '#FFFFFF',
           paddingHorizontal: 6,
-          paddingTop: 6,
+          paddingTop: 12,
+          paddingBottom: 8,
         },
         tabBarItemStyle: {
           minWidth: 60,
         },
         tabBarLabelStyle: {
           fontFamily: 'Inter',
-          fontSize: 11,
+          fontSize: 12,
           lineHeight: 14,
           fontWeight: '500',
-          marginTop: 3,
+          marginTop: 8,
         },
         tabBarActiveTintColor: '#30353B',
         tabBarInactiveTintColor: '#8E969F',
@@ -39,6 +40,9 @@ export default function MainTabsLayout() {
           if (route.name === 'counselors') {
             return <Feather name="users" size={16} color={color} />;
           }
+          if (route.name === 'articles') {
+            return <Feather name="book-open" size={16} color={color} />;
+          }
 
           return <Feather name="user" size={16} color={color} />;
         },
@@ -46,6 +50,7 @@ export default function MainTabsLayout() {
       <Tabs.Screen name="home" options={{ title: 'Home' }} />
       <Tabs.Screen name="ai-chat" options={{ title: 'Chat' }} />
       <Tabs.Screen name="counselors" options={{ title: 'Counselors' }} />
+      <Tabs.Screen name="articles" options={{ title: 'Articles' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
     </Tabs>
   );

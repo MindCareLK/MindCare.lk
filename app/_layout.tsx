@@ -7,6 +7,7 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
 
+import { AuthProvider } from "@/components/AuthContext";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
 export const unstable_settings = {
@@ -18,12 +19,13 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="(main-tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="member-login" options={{ headerShown: false }} />
-        <Stack.Screen name="counselor-login" options={{ headerShown: false }} />
+      <AuthProvider>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="(main-tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="(counselor-tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="member-login" options={{ headerShown: false }} />
+          <Stack.Screen name="counselor-login" options={{ headerShown: false }} />
         <Stack.Screen name="articles" options={{ headerShown: false }} />
         <Stack.Screen name="article_detail" options={{ headerShown: false }} />
         <Stack.Screen
@@ -35,15 +37,7 @@ export default function RootLayout() {
           options={{ headerShown: false }}
         />
         <Stack.Screen
-          name="counselor-profile"
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="counselor-dashboard"
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="counselor-schedule"
+          name="member-information-form"
           options={{ headerShown: false }}
         />
         <Stack.Screen name="call-selection" options={{ headerShown: false }} />
@@ -59,7 +53,13 @@ export default function RootLayout() {
           options={{ presentation: "modal", title: "Modal" }}
         />
       </Stack>
-      <StatusBar style="auto" />
+      </AuthProvider>
+      <StatusBar
+        style="dark"
+        translucent={false}
+        backgroundColor="#FFFFFF"
+        hidden={false}
+      />
     </ThemeProvider>
   );
 }

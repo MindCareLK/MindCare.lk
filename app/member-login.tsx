@@ -1,8 +1,12 @@
+import { signInMember, signInMemberWithGoogle } from "@/lib/members";
+import { signInWithNativeGoogle } from "@/lib/native-google-signin";
 import { Feather, Ionicons } from "@expo/vector-icons";
+import Constants, { ExecutionEnvironment } from "expo-constants";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { useState } from "react";
 import {
+  Alert,
   StyleSheet,
   Text,
   TextInput,
@@ -15,6 +19,7 @@ export default function LoginScreen() {
   const [emailAddress, setEmailAddress] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const canSignIn =
     emailAddress.trim().length > 4 && password.trim().length >= 8;
 
@@ -23,27 +28,68 @@ export default function LoginScreen() {
     router.back();
   };
 
-  const handleSignIn = () => {
+  const handleSignIn = async () => {
     if (!canSignIn) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
 
-    const derivedName = (emailAddress.trim().split("@")[0] ?? "")
-      .replace(/[._-]+/g, " ")
-      .split(" ")
-      .filter(Boolean)
-      .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
-      .join(" ");
-
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.replace({
-      pathname: "/home",
-    });
+    try {
+      await signInMember(emailAddress.trim().toLowerCase(), password);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace("/(main-tabs)/profile");
+    } catch (error) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Sign In Failed",
+        error instanceof Error && error.message
+          ? error.message
+          : "Unable to sign in right now.",
+      );
+    }
   };
 
-  const handleSocialPress = () => {
+  const handleGooglePress = async () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) {
+      Alert.alert(
+        "Google Sign-In Requires Dev Build",
+        "Expo Go cannot complete Google OAuth redirects. Build and run a development build, then try again.",
+      );
+      return;
+    }
+
+    if (!process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID) {
+      Alert.alert(
+        "Google Sign-In",
+        "Google sign-in is not configured yet. Add Google client IDs to env vars.",
+      );
+      return;
+    }
+
+    try {
+      setIsGoogleSubmitting(true);
+      const tokens = await signInWithNativeGoogle();
+
+      if (!tokens) {
+        return;
+      }
+
+      await signInMemberWithGoogle(tokens.idToken, tokens.accessToken);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace("/(main-tabs)/profile");
+    } catch (error) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Google Sign-In Failed",
+        error instanceof Error && error.message
+          ? error.message
+          : "Unable to sign in with Google right now.",
+      );
+    } finally {
+      setIsGoogleSubmitting(false);
+    }
   };
 
   const handleCreateFree = () => {
@@ -122,7 +168,7 @@ export default function LoginScreen() {
               !canSignIn && styles.signInButtonDisabled,
             ]}
             activeOpacity={0.9}
-            onPress={handleSignIn}
+            onPress={() => void handleSignIn()}
             disabled={!canSignIn}
           >
             <Text style={styles.signInText}>Sign In</Text>
@@ -137,19 +183,13 @@ export default function LoginScreen() {
           <TouchableOpacity
             style={styles.socialButton}
             activeOpacity={0.85}
-            onPress={handleSocialPress}
-          >
-            <Ionicons name="logo-apple" size={26} color="#000000" />
-            <Text style={styles.socialText}>Continue with Apple</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.socialButton}
-            activeOpacity={0.85}
-            onPress={handleSocialPress}
+            onPress={() => void handleGooglePress()}
+            disabled={isGoogleSubmitting}
           >
             <Ionicons name="logo-google" size={24} color="#000000" />
-            <Text style={styles.socialText}>Continue with Google</Text>
+            <Text style={styles.socialText}>
+              {isGoogleSubmitting ? "Signing in..." : "Continue with Google"}
+            </Text>
           </TouchableOpacity>
 
           <View style={styles.bottomRow}>
@@ -159,8 +199,6 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
         </View>
-
-        <View pointerEvents="none" style={styles.bottomArc} />
       </View>
     </SafeAreaView>
   );
@@ -337,15 +375,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 21,
     fontWeight: "500",
-  },
-  bottomArc: {
-    position: "absolute",
-    width: 520,
-    height: 235,
-    borderRadius: 260,
-    backgroundColor: "#2F88E8",
-    left: -40,
-    bottom: -140,
-    opacity: 0.96,
   },
 });

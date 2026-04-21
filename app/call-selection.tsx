@@ -21,21 +21,21 @@ export default function CallSelectionScreen() {
 
   const goOverview = () => {
     router.replace({
-      pathname: '/counselor-dashboard',
+      pathname: '/(counselor-tabs)/overview',
       params: { name: counselorName, specialty },
     });
   };
 
   const goSchedule = () => {
     router.replace({
-      pathname: '/counselor-schedule',
+      pathname: '/(counselor-tabs)/schedule',
       params: { name: counselorName, specialty },
     });
   };
 
   const goProfile = () => {
     router.replace({
-      pathname: '/counselor-profile',
+      pathname: '/(counselor-tabs)/profile',
       params: { name: counselorName, specialty },
     });
   };

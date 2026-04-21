@@ -1,6 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -8,7 +9,9 @@ type JoinCard = {
   id: 'member' | 'counselor';
   title: string;
   subtitle: string;
-  icon: string;
+  icon: 'heart' | 'stethoscope';
+  iconColor: string;
+  iconBackground: string;
 };
 
 const joinCards: JoinCard[] = [
@@ -17,52 +20,66 @@ const joinCards: JoinCard[] = [
     title: 'Member',
     subtitle: 'Seeking support & wellness',
     icon: 'heart',
+    iconColor: '#0D8AF3',
+    iconBackground: '#EAF5FF',
   },
   {
     id: 'counselor',
     title: 'Counselor',
     subtitle: 'Providing expert care',
     icon: 'stethoscope',
+    iconColor: '#0B7A75',
+    iconBackground: '#E7F7F4',
   },
 ];
 
 export default function RoleSelectionScreen() {
   const handlePressCard = (id: JoinCard['id']) => {
     void Haptics.selectionAsync();
+
     if (id === 'counselor') {
       router.push('/counselor-register');
       return;
     }
-    else{
-      router.push('/member-register');
-    }
-    
+
+    router.push('/(main-tabs)/home');
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <StatusBar style="light" backgroundColor="#2F88E8" translucent={false} />
       <View style={styles.container}>
-        <Text style={styles.title}>Welcome to MindCare</Text>
-        <Text style={styles.subtitle}>Your journey to mental wellness starts here</Text>
-        <Text style={styles.joinPrompt}>I want to join as a</Text>
+        <View pointerEvents="none" style={styles.topGlow} />
+        <View pointerEvents="none" style={styles.bottomGlow} />
 
-        {joinCards.map((card) => (
-          <TouchableOpacity key={card.id} style={styles.card} activeOpacity={0.9} onPress={() => handlePressCard(card.id)}>
-            <View style={styles.iconWrap}>
-              {card.id === 'member' ? (
-                <Ionicons name={card.icon as 'heart'} size={42} color="#FFFFFF" />
-              ) : (
-                <MaterialCommunityIcons
-                  name={card.icon as 'stethoscope'}
-                  size={44}
-                  color="#FFFFFF"
-                />
-              )}
-            </View>
-            <Text style={styles.cardTitle}>{card.title}</Text>
-            <Text style={styles.cardSubtitle}>{card.subtitle}</Text>
-          </TouchableOpacity>
-        ))}
+        <View style={styles.header}>
+          <Text style={styles.title}>Welcome to MindCare</Text>
+          <Text style={styles.subtitle}>Your journey to mental wellness starts here</Text>
+          <Text style={styles.joinPrompt}>I want to join as a</Text>
+        </View>
+
+        <View style={styles.cardsWrap}>
+          {joinCards.map((card) => (
+            <TouchableOpacity key={card.id} style={styles.card} activeOpacity={0.92} onPress={() => handlePressCard(card.id)}>
+              <View style={[styles.iconWrap, { backgroundColor: card.iconBackground }]}>
+                {card.id === 'member' ? (
+                  <Ionicons name={card.icon} size={30} color={card.iconColor} />
+                ) : (
+                  <MaterialCommunityIcons name={card.icon} size={32} color={card.iconColor} />
+                )}
+              </View>
+
+              <View style={styles.cardTextWrap}>
+                <Text style={styles.cardTitle}>{card.title}</Text>
+                <Text style={styles.cardSubtitle}>{card.subtitle}</Text>
+              </View>
+
+              <View style={styles.arrowWrap}>
+                <Ionicons name="arrow-forward" size={18} color="#16324F" />
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -77,97 +94,107 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#2F88E8',
     paddingHorizontal: 20,
-    paddingTop: 28,
+    paddingTop: 34,
     paddingBottom: 30,
+    justifyContent: 'center',
+  },
+  topGlow: {
+    position: 'absolute',
+    top: 40,
+    right: -40,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  bottomGlow: {
+    position: 'absolute',
+    bottom: 90,
+    left: -50,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: 'rgba(187, 231, 255, 0.12)',
+  },
+  header: {
+    marginBottom: 28,
   },
   title: {
-    fontFamily: 'Inter',
     textAlign: 'center',
-    fontSize: 54,
-    lineHeight: 62,
+    fontFamily: 'Inter',
+    fontSize: 40,
+    lineHeight: 46,
     color: '#FFFFFF',
     fontWeight: '800',
-    textShadowColor: 'rgba(0, 0, 0, 0.20)',
-    textShadowOffset: { width: 0, height: 4 },
-    textShadowRadius: 4,
   },
   subtitle: {
-    marginTop: 20,
+    marginTop: 12,
     textAlign: 'center',
     fontFamily: 'Inter',
     fontSize: 14,
-    lineHeight: 20,
-    color: '#E5EEFB',
+    lineHeight: 21,
+    color: '#E7F2FF',
     fontWeight: '500',
+    paddingHorizontal: 18,
   },
   joinPrompt: {
     marginTop: 20,
-    marginBottom: 18,
     textAlign: 'center',
     fontFamily: 'Inter',
-    fontSize: 20,
-    lineHeight: 26,
+    fontSize: 18,
+    lineHeight: 24,
     color: '#FFFFFF',
-    fontStyle: 'italic',
     fontWeight: '700',
   },
+  cardsWrap: {
+    gap: 16,
+  },
   card: {
-    borderRadius: 22,
-    backgroundColor: '#F3F4F6',
-    paddingVertical: 20,
-    paddingHorizontal: 16,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 18,
+    borderRadius: 24,
+    backgroundColor: '#F8FBFF',
+    paddingHorizontal: 18,
+    paddingVertical: 18,
     shadowColor: '#123D6A',
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
     shadowOffset: { width: 0, height: 10 },
     elevation: 5,
   },
   iconWrap: {
-    width: 110,
-    height: 110,
-    borderRadius: 22,
-    backgroundColor: '#2F88E8',
+    width: 58,
+    height: 58,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+  },
+  cardTextWrap: {
+    flex: 1,
+    marginLeft: 14,
   },
   cardTitle: {
     fontFamily: 'Inter',
-    fontSize: 24,
-    lineHeight: 30,
-    color: '#0D1116',
+    fontSize: 22,
+    lineHeight: 28,
+    color: '#0F1728',
     fontWeight: '800',
   },
   cardSubtitle: {
-    marginTop: 8,
+    marginTop: 4,
     fontFamily: 'Inter',
-    fontSize: 14,
-    lineHeight: 19,
-    color: '#7D7D7D',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#6C7788',
     fontWeight: '500',
   },
-  bottomRow: {
-    marginTop: 'auto',
-    flexDirection: 'row',
+  arrowWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EDF4FB',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
-  },
-  bottomText: {
-    fontFamily: 'Inter',
-    fontSize: 13,
-    lineHeight: 18,
-    color: '#E9F1FD',
-    fontWeight: '500',
-  },
-  bottomLink: {
-    fontFamily: 'Inter',
-    fontSize: 13,
-    lineHeight: 18,
-    color: '#FFFFFF',
-    fontWeight: '700',
-    textDecorationLine: 'underline',
+    marginLeft: 12,
   },
 });

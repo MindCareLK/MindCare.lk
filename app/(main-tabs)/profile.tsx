@@ -1,10 +1,14 @@
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuthContext } from '@/components/AuthContext';
+import { addCounselorNotification } from '@/components/notification-store';
 import { RescheduleModal, type RescheduleSession } from '@/components/RescheduleModal';
 import { removeBookedSession, updateBookedSession, useBookedSessions } from '@/components/session-store';
+import { getMemberProfile } from '@/lib/members';
 
 type ProfileForm = {
   name: string;
@@ -21,6 +25,15 @@ type InfoField = {
 };
 
 type SessionCard = RescheduleSession;
+
+function deriveNameFromEmail(email: string) {
+  return (email.split('@')[0] ?? '')
+    .replace(/[._-]+/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+    .join(' ');
+}
 
 function buildSessionRange(start: string) {
   const [time, meridiem] = start.split(' ');
@@ -64,10 +77,10 @@ const personalInfo: InfoField[] = [
 ];
 
 const initialProfile: ProfileForm = {
-  name: 'John Doe',
-  email: 'john.doe@mail.com',
-  gender: 'Male',
-  dob: 'January 15, 1990',
+  name: '',
+  email: '',
+  gender: '',
+  dob: '',
 };
 
 function InfoFieldCard({
@@ -126,8 +139,9 @@ function SectionHeader({
 }
 
 export default function ProfilePage() {
-  const [profile, setProfile] = useState(initialProfile);
-  const [draftProfile, setDraftProfile] = useState(initialProfile);
+  const { currentUser, memberProfile, setMemberProfile } = useAuthContext();
+  const [profile, setProfile] = useState(memberProfile);
+  const [draftProfile, setDraftProfile] = useState(memberProfile);
   const [isEditing, setIsEditing] = useState(false);
   const [rescheduleSession, setRescheduleSession] = useState<SessionCard | null>(null);
   const [selectedRescheduleDate, setSelectedRescheduleDate] = useState('2026-03-11');
@@ -135,12 +149,93 @@ export default function ProfilePage() {
   const scrollViewRef = useRef<ScrollView | null>(null);
   const [detailsSectionY, setDetailsSectionY] = useState(0);
   const bookedSessions = useBookedSessions();
+  const [isInfoFilled, setIsInfoFilled] = useState(false);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
 
   const upcomingCount = bookedSessions.filter((session) => session.status === 'Upcoming').length;
+
+  const params = useLocalSearchParams<{ filledName?: string; filledEmail?: string; filledGender?: string; filledDob?: string }>();
+
+  useEffect(() => {
+    const nextProfile = {
+      name: params.filledName ?? memberProfile.name,
+      email: params.filledEmail ?? memberProfile.email,
+      gender: params.filledGender ?? memberProfile.gender,
+      dob: params.filledDob ?? memberProfile.dob,
+    };
+
+    if (nextProfile.name || nextProfile.email || nextProfile.gender || nextProfile.dob) {
+      setMemberProfile(nextProfile);
+    }
+  }, [memberProfile.dob, memberProfile.email, memberProfile.gender, params.filledDob, params.filledEmail, params.filledGender, params.filledName, setMemberProfile]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setProfile(memberProfile);
+      setDraftProfile(memberProfile);
+      setIsInfoFilled(Boolean(memberProfile.name || memberProfile.email || memberProfile.gender || memberProfile.dob));
+      setIsLoadingProfile(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    void (async () => {
+      try {
+        const savedProfile = await getMemberProfile(currentUser.uid);
+        const nextProfile = savedProfile
+          ? {
+              name: savedProfile.name,
+              email: savedProfile.email,
+              gender: savedProfile.gender,
+              dob: savedProfile.dob,
+            }
+          : {
+              name: currentUser.displayName || deriveNameFromEmail(currentUser.email ?? ''),
+              email: currentUser.email || '',
+              gender: '',
+              dob: '',
+            };
+
+        if (!isMounted) {
+          return;
+        }
+
+        setMemberProfile(nextProfile);
+        setProfile(nextProfile);
+        setDraftProfile(nextProfile);
+        setIsInfoFilled(Boolean(nextProfile.name || nextProfile.email || nextProfile.gender || nextProfile.dob));
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        const fallbackProfile = {
+          name: currentUser.displayName || deriveNameFromEmail(currentUser.email ?? ''),
+          email: currentUser.email || '',
+          gender: '',
+          dob: '',
+        };
+
+        setProfile(fallbackProfile);
+        setDraftProfile(fallbackProfile);
+        setIsInfoFilled(Boolean(fallbackProfile.name || fallbackProfile.email));
+      } finally {
+        if (isMounted) {
+          setIsLoadingProfile(false);
+        }
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser, memberProfile, setMemberProfile]);
 
   const handleEditPress = () => {
     if (isEditing) {
       setProfile(draftProfile);
+      setMemberProfile(draftProfile);
       setIsEditing(false);
       return;
     }
@@ -166,7 +261,13 @@ export default function ProfilePage() {
       {
         text: 'Logout',
         style: 'destructive',
-        onPress: () => router.replace('/(tabs)'),
+        onPress: () => {
+          if ('dismissAll' in router && typeof router.dismissAll === 'function') {
+            router.dismissAll();
+          }
+
+          router.replace('/(tabs)');
+        },
       },
     ]);
   };
@@ -186,12 +287,23 @@ export default function ProfilePage() {
       return;
     }
 
+    const updatedDate = formatSessionDate(selectedRescheduleDate);
+    const updatedTime = buildSessionRange(selectedTimeSlot);
+
     updateBookedSession(rescheduleSession.id, {
-      date: formatSessionDate(selectedRescheduleDate),
-      time: buildSessionRange(selectedTimeSlot),
+      date: updatedDate,
+      time: updatedTime,
       status: 'Upcoming',
       actions: true,
     });
+
+    addCounselorNotification({
+      counselorName: rescheduleSession.doctor,
+      type: 'reschedule',
+      title: 'Session rescheduled',
+      message: `A patient moved their session to ${updatedDate} at ${updatedTime}.`,
+    });
+
     setRescheduleSession(null);
   };
 
@@ -207,6 +319,7 @@ export default function ProfilePage() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <StatusBar style="light" backgroundColor="#2F88E8" translucent={false} />
       <View style={styles.container}>
         <ScrollView
           ref={scrollViewRef}
@@ -224,8 +337,10 @@ export default function ProfilePage() {
             </View>
 
             <View style={styles.profileSummaryCard}>
-              <Text style={styles.profileName}>{profile.name}</Text>
-              <Text style={styles.profileEmail}>{profile.email}</Text>
+              <Text style={styles.profileName}>
+                {isLoadingProfile ? 'Loading profile...' : profile.name || 'Your name will appear here'}
+              </Text>
+              <Text style={styles.profileEmail}>{profile.email || 'Email not added yet'}</Text>
               <View style={styles.profileBadgeRow}>
                 <View style={styles.profileBadge}>
                   <Feather name="shield" size={12} color="#2F88E8" />
@@ -247,29 +362,38 @@ export default function ProfilePage() {
                   key={field.id}
                   field={field}
                   isEditing={isEditing}
-                  value={isEditing ? draftProfile[field.id] : profile[field.id]}
+                  value={isEditing ? draftProfile[field.id] : profile[field.id] || `Add ${field.label.toLowerCase()}`}
                   onChange={(value) => setDraftProfile((current) => ({ ...current, [field.id]: value }))}
                 />
               ))}
             </View>
           </View>
           <View style={styles.editProfile}>
-            {isEditing ? (
-                  <View style={styles.editActions}>
-                    <TouchableOpacity style={styles.outlinedAction} activeOpacity={0.9} onPress={handleCancel}>
-                      <Text style={styles.outlinedActionText}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.primaryActionCompact} activeOpacity={0.9} onPress={handleEditPress}>
-                      <Text style={styles.primaryActionText}>Save Changes</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <TouchableOpacity style={styles.primaryAction} activeOpacity={0.9} onPress={handleEditPress}>
-                    <Feather name="edit-3" size={16} color="#FFFFFF" />
-                    <Text style={styles.primaryActionText}>Edit Profile</Text>
-                  </TouchableOpacity>
-                )}
-          </View>
+  {!isInfoFilled ? (
+    <TouchableOpacity
+      style={styles.fillInfoAction}
+      activeOpacity={0.9}
+      onPress={() => router.push('/member-information-form')}
+    >
+      <Feather name="user-plus" size={16} color="#FFFFFF" />
+      <Text style={styles.primaryActionText}>Add Personal Information</Text>
+    </TouchableOpacity>
+  ) : isEditing ? (
+    <View style={styles.editActions}>
+      <TouchableOpacity style={styles.outlinedAction} activeOpacity={0.9} onPress={handleCancel}>
+        <Text style={styles.outlinedActionText}>Cancel</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.primaryActionCompact} activeOpacity={0.9} onPress={handleEditPress}>
+        <Text style={styles.primaryActionText}>Save Changes</Text>
+      </TouchableOpacity>
+    </View>
+  ) : (
+    <TouchableOpacity style={styles.primaryAction} activeOpacity={0.9} onPress={handleEditPress}>
+      <Feather name="edit-3" size={16} color="#FFFFFF" />
+      <Text style={styles.primaryActionText}>Edit Profile</Text>
+    </TouchableOpacity>
+  )}
+</View>
 
           <View style={styles.stickySessionsHeader}>
             <SectionHeader
@@ -613,6 +737,21 @@ const styles = StyleSheet.create({
     paddingHorizontal:20,
     paddingBottom: 16,
   },
+  fillInfoAction: {
+  marginTop: 4,
+  height: 46,
+  borderRadius: 12,
+  backgroundColor: '#1B9C4B',  // green to distinguish from Edit
+  alignItems: 'center',
+  justifyContent: 'center',
+  flexDirection: 'row',
+  gap: 8,
+  shadowColor: '#1B9C4B',
+  shadowOpacity: 0.18,
+  shadowRadius: 10,
+  shadowOffset: { width: 0, height: 6 },
+  elevation: 4,
+},
   upcomingCountPill: {
     borderRadius: 999,
     backgroundColor: '#2F88E8',

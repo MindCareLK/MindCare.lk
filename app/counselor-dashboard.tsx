@@ -1,23 +1,45 @@
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { signOut } from 'firebase/auth';
 
-type DashboardParams = {
-  name?: string | string[];
-  specialty?: string | string[];
-};
-
-const toSingleValue = (value: string | string[] | undefined): string =>
-  typeof value === 'string' ? value : Array.isArray(value) ? value[0] ?? '' : '';
+import { markCounselorNotificationsAsRead, useCounselorNotifications } from '@/components/notification-store';
+import { getCounselorProfile } from '@/lib/counselors';
+import { auth } from '@/lib/firebase';
 
 export default function CounselorDashboardScreen() {
-  const params = useLocalSearchParams<DashboardParams>();
-  const counselorName = toSingleValue(params.name) || 'Counselor';
-  const specialty = toSingleValue(params.specialty) || 'General Counseling';
+  const [counselorName, setCounselorName] = useState('Counselor');
+  const [specialty, setSpecialty] = useState('General Counseling');
   const [isReminderSent, setIsReminderSent] = useState(false);
+  const [isNotificationsVisible, setIsNotificationsVisible] = useState(false);
+  const [isAccountMenuVisible, setIsAccountMenuVisible] = useState(false);
+  const [isLogoutConfirmVisible, setIsLogoutConfirmVisible] = useState(false);
+  const notifications = useCounselorNotifications();
+
+  useEffect(() => {
+    const user = auth?.currentUser;
+
+    if (!user) {
+      router.replace('/counselor-login');
+      return;
+    }
+
+    const loadProfile = async () => {
+      const profile = await getCounselorProfile(user.uid);
+      if (!profile) {
+        router.replace('/(counselor-tabs)/profile');
+        return;
+      }
+
+      setCounselorName(profile.displayName || profile.fullName || user.displayName || 'Counselor');
+      setSpecialty(profile.specialty || 'General Counseling');
+    };
+
+    void loadProfile();
+  }, []);
 
   const sendReminder = (label: string) => {
     setIsReminderSent(true);
@@ -41,14 +63,65 @@ export default function CounselorDashboardScreen() {
     ]);
   };
 
+  const handleLogout = () => {
+    setIsAccountMenuVisible(false);
+    setIsLogoutConfirmVisible(true);
+  };
+
+  const confirmLogout = async () => {
+    try {
+      setIsLogoutConfirmVisible(false);
+
+      if (auth) {
+        await signOut(auth);
+      }
+
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace('/counselor-login');
+    } catch {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Logout Failed', 'Unable to log out right now. Please try again.');
+    }
+  };
+
+  const handleOpenSettingsMenu = () => {
+    void Haptics.selectionAsync();
+    setIsAccountMenuVisible(true);
+  };
+
+  const counselorNotifications = useMemo(
+    () => notifications.filter((notification) => notification.counselorName === counselorName),
+    [counselorName, notifications]
+  );
+  const unreadNotificationCount = counselorNotifications.filter((notification) => !notification.read).length;
+
+  const handleOpenNotifications = () => {
+    void Haptics.selectionAsync();
+    markCounselorNotificationsAsRead(counselorName);
+    setIsNotificationsVisible(true);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.screen}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Counselor Portal</Text>
-          <TouchableOpacity style={styles.headerIcon} activeOpacity={0.85}>
-            <Feather name="settings" size={24} color="#111B2E" />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.headerIcon} activeOpacity={0.85} onPress={handleOpenNotifications}>
+              <Feather name="bell" size={22} color="#111B2E" />
+              {unreadNotificationCount > 0 ? (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                  </Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.headerIcon} activeOpacity={0.85} onPress={handleOpenSettingsMenu}>
+              <Feather name="settings" size={24} color="#111B2E" />
+            </TouchableOpacity>
+          </View>
         </View>
         <View style={styles.headerDivider} />
 
@@ -116,7 +189,7 @@ export default function CounselorDashboardScreen() {
               activeOpacity={0.85}
               onPress={() =>
                 router.replace({
-                  pathname: '/counselor-schedule',
+                  pathname: '/(counselor-tabs)/schedule',
                   params: { name: counselorName, specialty },
                 })
               }>
@@ -175,36 +248,119 @@ export default function CounselorDashboardScreen() {
           </Text>
         </ScrollView>
 
-        <View style={styles.bottomBar}>
-          <TouchableOpacity style={styles.navItem} activeOpacity={0.85}>
-            <Feather name="grid" size={16} color="#30353B" />
-            <Text style={styles.navActive}>Overview</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.navItem}
-            activeOpacity={0.85}
-            onPress={() =>
-              router.replace({
-                pathname: '/counselor-schedule',
-                params: { name: counselorName, specialty },
-              })
-            }>
-            <Feather name="calendar" size={16} color="#8E969F" />
-            <Text style={styles.navText}>Schedule</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.navItem}
-            activeOpacity={0.85}
-            onPress={() =>
-              router.replace({
-                pathname: '/counselor-profile',
-                params: { name: counselorName },
-              })
-            }>
-            <Feather name="user" size={16} color="#8E969F" />
-            <Text style={styles.navText}>My Profile</Text>
-          </TouchableOpacity>
-        </View>
+        <Modal visible={isNotificationsVisible} transparent animationType="fade" onRequestClose={() => setIsNotificationsVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <Pressable style={styles.modalBackdrop} onPress={() => setIsNotificationsVisible(false)} />
+            <View style={styles.sheet}>
+              <View style={styles.sheetHandle} />
+              <View style={styles.sheetHeader}>
+                <View>
+                  <Text style={styles.sheetTitle}>Notifications</Text>
+                  <Text style={styles.sheetSubtitle}>Booking and reschedule updates</Text>
+                </View>
+                <TouchableOpacity activeOpacity={0.85} onPress={() => setIsNotificationsVisible(false)}>
+                  <Feather name="x" size={20} color="#6D7685" />
+                </TouchableOpacity>
+              </View>
+
+              {counselorNotifications.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <View style={styles.emptyIconWrap}>
+                    <Feather name="bell" size={20} color="#2F88E8" />
+                  </View>
+                  <Text style={styles.emptyTitle}>No notifications yet</Text>
+                  <Text style={styles.emptyText}>New bookings and reschedules will appear here.</Text>
+                </View>
+              ) : (
+                <ScrollView contentContainerStyle={styles.sheetList} showsVerticalScrollIndicator={false}>
+                  {counselorNotifications.slice(0, 8).map((notification) => (
+                    <View key={notification.id} style={styles.notificationCard}>
+                      <View
+                        style={[
+                          styles.notificationTypeIcon,
+                          notification.type === 'booking' ? styles.notificationTypeBooking : styles.notificationTypeReschedule,
+                        ]}>
+                        <Feather
+                          name={notification.type === 'booking' ? 'calendar' : 'refresh-cw'}
+                          size={16}
+                          color={notification.type === 'booking' ? '#2F88E8' : '#0B7A75'}
+                        />
+                      </View>
+                      <View style={styles.notificationTextWrap}>
+                        <Text style={styles.notificationTitle}>{notification.title}</Text>
+                        <Text style={styles.notificationMessage}>{notification.message}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          </View>
+        </Modal>
+
+        <Modal visible={isAccountMenuVisible} transparent animationType="fade" onRequestClose={() => setIsAccountMenuVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <Pressable style={styles.modalBackdrop} onPress={() => setIsAccountMenuVisible(false)} />
+            <View style={styles.actionSheet}>
+              <View style={styles.sheetHandle} />
+              <Text style={styles.sheetTitle}>Account</Text>
+              <Text style={styles.sheetSubtitle}>Manage your counselor profile</Text>
+
+              <TouchableOpacity
+                style={styles.actionRow}
+                activeOpacity={0.9}
+                onPress={() => {
+                  setIsAccountMenuVisible(false);
+                  router.replace({
+                    pathname: '/(counselor-tabs)/profile',
+                    params: { name: counselorName },
+                  });
+                }}>
+                <View style={styles.actionIconWrap}>
+                  <Feather name="user" size={18} color="#2F88E8" />
+                </View>
+                <View style={styles.actionTextWrap}>
+                  <Text style={styles.actionTitle}>My Profile</Text>
+                  <Text style={styles.actionHint}>View and update your counselor details</Text>
+                </View>
+                <Feather name="chevron-right" size={18} color="#94A0AE" />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.actionRow} activeOpacity={0.9} onPress={handleLogout}>
+                <View style={[styles.actionIconWrap, styles.actionIconDanger]}>
+                  <Feather name="log-out" size={18} color="#D84C4C" />
+                </View>
+                <View style={styles.actionTextWrap}>
+                  <Text style={styles.actionTitleDanger}>Logout</Text>
+                  <Text style={styles.actionHint}>Sign out from this device securely</Text>
+                </View>
+                <Feather name="chevron-right" size={18} color="#D7A1A1" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal visible={isLogoutConfirmVisible} transparent animationType="fade" onRequestClose={() => setIsLogoutConfirmVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <Pressable style={styles.modalBackdrop} onPress={() => setIsLogoutConfirmVisible(false)} />
+            <View style={styles.confirmSheet}>
+              <View style={[styles.confirmIconWrap, styles.actionIconDanger]}>
+                <Feather name="log-out" size={22} color="#D84C4C" />
+              </View>
+              <Text style={styles.confirmTitle}>Logout from account?</Text>
+              <Text style={styles.confirmText}>You will need to sign in again to access the counselor portal.</Text>
+
+              <View style={styles.confirmActions}>
+                <TouchableOpacity style={styles.confirmSecondaryButton} activeOpacity={0.9} onPress={() => setIsLogoutConfirmVisible(false)}>
+                  <Text style={styles.confirmSecondaryText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.confirmPrimaryButton} activeOpacity={0.9} onPress={() => void confirmLogout()}>
+                  <Text style={styles.confirmPrimaryText}>Logout</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -233,11 +389,36 @@ const styles = StyleSheet.create({
     color: '#111B2E',
     fontWeight: '800',
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   headerIcon: {
     width: 32,
     height: 32,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#F24D4D',
+    paddingHorizontal: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notificationBadgeText: {
+    fontFamily: 'Inter',
+    fontSize: 9,
+    lineHeight: 11,
+    color: '#FFFFFF',
+    fontWeight: '800',
   },
   headerDivider: {
     height: 1,
@@ -537,38 +718,266 @@ const styles = StyleSheet.create({
     color: '#8791A1',
     fontWeight: '500',
   },
-  bottomBar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 62,
-    borderTopWidth: 1,
-    borderTopColor: '#ECECEC',
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(15, 23, 42, 0.28)',
+  },
+  modalBackdrop: {
+    flex: 1,
+  },
+  sheet: {
+    maxHeight: '72%',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     backgroundColor: '#FFFFFF',
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 28,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: -6 },
+    elevation: 14,
+  },
+  actionSheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 28,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: -6 },
+    elevation: 14,
+  },
+  confirmSheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 22,
+    paddingTop: 20,
+    paddingBottom: 28,
+    alignItems: 'center',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: -6 },
+    elevation: 14,
+  },
+  sheetHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#D7DEE8',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  sheetHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingHorizontal: 6,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
   },
-  navItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 3,
-    minWidth: 60,
-  },
-  navText: {
+  sheetTitle: {
     fontFamily: 'Inter',
-    fontSize: 11,
-    lineHeight: 14,
-    color: '#8E969F',
+    fontSize: 22,
+    lineHeight: 28,
+    color: '#142033',
+    fontWeight: '800',
+  },
+  sheetSubtitle: {
+    marginTop: 4,
+    fontFamily: 'Inter',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#728096',
     fontWeight: '500',
   },
-  navActive: {
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 30,
+    paddingHorizontal: 18,
+  },
+  emptyIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 18,
+    backgroundColor: '#EAF3FE',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    marginTop: 14,
     fontFamily: 'Inter',
-    fontSize: 11,
-    lineHeight: 14,
-    color: '#30353B',
+    fontSize: 18,
+    lineHeight: 22,
+    color: '#1A2332',
+    fontWeight: '800',
+  },
+  emptyText: {
+    marginTop: 6,
+    textAlign: 'center',
+    fontFamily: 'Inter',
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#738194',
+    fontWeight: '500',
+  },
+  sheetList: {
+    gap: 12,
+    paddingBottom: 12,
+  },
+  notificationCard: {
+    flexDirection: 'row',
+    gap: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E5EAF1',
+    backgroundColor: '#FAFBFD',
+    padding: 14,
+  },
+  notificationTypeIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notificationTypeBooking: {
+    backgroundColor: '#EAF3FE',
+  },
+  notificationTypeReschedule: {
+    backgroundColor: '#E7F7F4',
+  },
+  notificationTextWrap: {
+    flex: 1,
+  },
+  notificationTitle: {
+    fontFamily: 'Inter',
+    fontSize: 15,
+    lineHeight: 20,
+    color: '#172133',
+    fontWeight: '800',
+  },
+  notificationMessage: {
+    marginTop: 4,
+    fontFamily: 'Inter',
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#677689',
+    fontWeight: '500',
+  },
+  actionRow: {
+    minHeight: 72,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E5EAF1',
+    backgroundColor: '#FBFCFE',
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 14,
+  },
+  actionIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: '#EAF3FE',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionIconDanger: {
+    backgroundColor: '#FDEEEE',
+  },
+  actionTextWrap: {
+    flex: 1,
+  },
+  actionTitle: {
+    fontFamily: 'Inter',
+    fontSize: 15,
+    lineHeight: 19,
+    color: '#172133',
+    fontWeight: '800',
+  },
+  actionTitleDanger: {
+    fontFamily: 'Inter',
+    fontSize: 15,
+    lineHeight: 19,
+    color: '#D84C4C',
+    fontWeight: '800',
+  },
+  actionHint: {
+    marginTop: 3,
+    fontFamily: 'Inter',
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#7A8799',
+    fontWeight: '500',
+  },
+  confirmIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmTitle: {
+    marginTop: 16,
+    fontFamily: 'Inter',
+    fontSize: 22,
+    lineHeight: 27,
+    color: '#172133',
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  confirmText: {
+    marginTop: 8,
+    textAlign: 'center',
+    fontFamily: 'Inter',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#728096',
+    fontWeight: '500',
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 22,
+  },
+  confirmSecondaryButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#D7DEE8',
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmSecondaryText: {
+    fontFamily: 'Inter',
+    fontSize: 15,
+    lineHeight: 19,
+    color: '#556275',
     fontWeight: '700',
+  },
+  confirmPrimaryButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#D84C4C',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmPrimaryText: {
+    fontFamily: 'Inter',
+    fontSize: 15,
+    lineHeight: 19,
+    color: '#FFFFFF',
+    fontWeight: '800',
   },
 });

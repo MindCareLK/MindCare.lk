@@ -1,58 +1,149 @@
-import { Feather, Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import * as Haptics from 'expo-haptics';
-import { useState } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { signInWithNativeGoogle } from "@/lib/native-google-signin";
+import { Feather, Ionicons } from "@expo/vector-icons";
+import Constants, { ExecutionEnvironment } from "expo-constants";
+import * as Haptics from "expo-haptics";
+import { router } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
+import { useState } from "react";
+import {
+  Alert,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+import { signInCounselor, signInCounselorWithGoogle } from "@/lib/counselors";
+import { getFirebaseConfigError } from "@/lib/firebase";
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
-  const [emailAddress, setEmailAddress] = useState('');
-  const [password, setPassword] = useState('');
+  const [emailAddress, setEmailAddress] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const canSignIn = emailAddress.trim().length > 4 && password.trim().length >= 8;
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+  const canSignIn =
+    emailAddress.trim().length > 4 && password.trim().length >= 8;
 
   const handleBack = () => {
     void Haptics.selectionAsync();
     router.back();
   };
 
-  const handleSignIn = () => {
+  const handleSignIn = async () => {
     if (!canSignIn) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
 
-    const derivedName = (emailAddress.trim().split('@')[0] ?? '')
-      .replace(/[._-]+/g, ' ')
-      .split(' ')
-      .filter(Boolean)
-      .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
-      .join(' ');
+    const firebaseConfigError = getFirebaseConfigError();
+    if (firebaseConfigError) {
+      Alert.alert("Firebase Not Configured", firebaseConfigError);
+      return;
+    }
 
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.replace({
-      pathname: '/counselor-dashboard',
-      params: {
-        name: derivedName ? `Mr ${derivedName}` : 'Counselor',
-        specialty: 'General Counseling',
-      },
-    });
+    try {
+      setIsSubmitting(true);
+      const profile = await signInCounselor(
+        emailAddress.trim().toLowerCase(),
+        password,
+      );
+
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace(
+        profile.profileCompleted
+          ? "/(counselor-tabs)/overview"
+          : "/(counselor-tabs)/profile",
+      );
+    } catch (error) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+
+      const message =
+        error instanceof Error && error.message
+          ? error.message.includes("auth/invalid-credential") ||
+            error.message.includes("auth/wrong-password")
+            ? "Incorrect email or password."
+            : error.message.includes("auth/user-not-found")
+              ? "No counselor account exists for that email."
+              : error.message.includes("auth/network-request-failed")
+                ? "Network error while contacting Firebase."
+                : error.message
+          : "Unable to sign in right now.";
+
+      Alert.alert("Sign In Failed", message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleSocialPress = () => {
+  const handleGooglePress = async () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) {
+      Alert.alert(
+        "Google Sign-In Requires Dev Build",
+        "Expo Go cannot complete Google OAuth redirects. Build and run a development build, then try again.",
+      );
+      return;
+    }
+
+    if (!process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID) {
+      Alert.alert(
+        "Google Sign-In",
+        "Google sign-in is not configured yet. Add Google client IDs to env vars.",
+      );
+      return;
+    }
+
+    try {
+      setIsGoogleSubmitting(true);
+      const tokens = await signInWithNativeGoogle();
+
+      if (!tokens) {
+        return;
+      }
+
+      const profile = await signInCounselorWithGoogle(
+        tokens.idToken,
+        tokens.accessToken,
+      );
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace(
+        profile.profileCompleted
+          ? "/(counselor-tabs)/overview"
+          : "/(counselor-tabs)/profile",
+      );
+    } catch (error) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Google Sign-In Failed",
+        error instanceof Error && error.message
+          ? error.message
+          : "Unable to sign in with Google right now.",
+      );
+    } finally {
+      setIsGoogleSubmitting(false);
+    }
   };
 
   const handleCreateFree = () => {
     void Haptics.selectionAsync();
-    router.push('/counselor-register');
+    router.push("/counselor-register");
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} activeOpacity={0.8} onPress={handleBack}>
+          <TouchableOpacity
+            style={styles.backButton}
+            activeOpacity={0.8}
+            onPress={handleBack}
+          >
             <Feather name="chevron-left" size={34} color="#FFFFFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Welcome Back</Text>
@@ -60,7 +151,9 @@ export default function LoginScreen() {
 
         <View style={styles.panel}>
           <Text style={styles.title}>Sign in to MindCare</Text>
-          <Text style={styles.subtitle}>Continue your journey to a calmer mind and better wellness</Text>
+          <Text style={styles.subtitle}>
+            Continue your journey to a calmer mind and better wellness
+          </Text>
 
           <Text style={styles.label}>Email</Text>
           <View style={styles.inputWrap}>
@@ -95,17 +188,30 @@ export default function LoginScreen() {
               autoCapitalize="none"
               autoCorrect={false}
             />
-            <TouchableOpacity onPress={() => setShowPassword((prev) => !prev)} activeOpacity={0.8}>
-              <Feather name={showPassword ? 'eye-off' : 'eye'} size={22} color="#B0B0B0" />
+            <TouchableOpacity
+              onPress={() => setShowPassword((prev) => !prev)}
+              activeOpacity={0.8}
+            >
+              <Feather
+                name={showPassword ? "eye-off" : "eye"}
+                size={22}
+                color="#B0B0B0"
+              />
             </TouchableOpacity>
           </View>
 
           <TouchableOpacity
-            style={[styles.signInButton, !canSignIn && styles.signInButtonDisabled]}
+            style={[
+              styles.signInButton,
+              (!canSignIn || isSubmitting) && styles.signInButtonDisabled,
+            ]}
             activeOpacity={0.9}
-            onPress={handleSignIn}
-            disabled={!canSignIn}>
-            <Text style={styles.signInText}>Sign In</Text>
+            onPress={() => void handleSignIn()}
+            disabled={!canSignIn || isSubmitting}
+          >
+            <Text style={styles.signInText}>
+              {isSubmitting ? "Signing In..." : "Sign In"}
+            </Text>
           </TouchableOpacity>
 
           <View style={styles.dividerWrap}>
@@ -114,14 +220,16 @@ export default function LoginScreen() {
             <View style={styles.dividerLine} />
           </View>
 
-          <TouchableOpacity style={styles.socialButton} activeOpacity={0.85} onPress={handleSocialPress}>
-            <Ionicons name="logo-apple" size={26} color="#000000" />
-            <Text style={styles.socialText}>Continue with Apple</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.socialButton} activeOpacity={0.85} onPress={handleSocialPress}>
+          <TouchableOpacity
+            style={styles.socialButton}
+            activeOpacity={0.85}
+            onPress={() => void handleGooglePress()}
+            disabled={isGoogleSubmitting}
+          >
             <Ionicons name="logo-google" size={24} color="#000000" />
-            <Text style={styles.socialText}>Continue with Google</Text>
+            <Text style={styles.socialText}>
+              {isGoogleSubmitting ? "Signing in..." : "Continue with Google"}
+            </Text>
           </TouchableOpacity>
 
           <View style={styles.bottomRow}>
@@ -131,8 +239,6 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
         </View>
-
-        <View pointerEvents="none" style={styles.bottomArc} />
       </View>
     </SafeAreaView>
   );
@@ -141,11 +247,11 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#2F88E8',
+    backgroundColor: "#2F88E8",
   },
   container: {
     flex: 1,
-    backgroundColor: '#2F88E8',
+    backgroundColor: "#2F88E8",
   },
   header: {
     paddingHorizontal: 18,
@@ -155,18 +261,18 @@ const styles = StyleSheet.create({
   backButton: {
     width: 30,
     height: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 6,
   },
   headerTitle: {
-    textAlign: 'center',
-    fontFamily: 'Inter',
+    textAlign: "center",
+    fontFamily: "Inter",
     fontSize: 32,
     lineHeight: 40,
-    color: '#FFFFFF',
-    fontWeight: '800',
-    textShadowColor: 'rgba(0, 0, 0, 0.20)',
+    color: "#FFFFFF",
+    fontWeight: "800",
+    textShadowColor: "rgba(0, 0, 0, 0.20)",
     textShadowOffset: { width: 0, height: 4 },
     textShadowRadius: 4,
   },
@@ -174,62 +280,62 @@ const styles = StyleSheet.create({
     flex: 1,
     borderTopLeftRadius: 62,
     borderTopRightRadius: 62,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: "#F3F4F6",
     paddingHorizontal: 22,
     paddingTop: 30,
   },
   title: {
-    fontFamily: 'Inter',
-    textAlign: 'center',
+    fontFamily: "Inter",
+    textAlign: "center",
     fontSize: 20,
     lineHeight: 20,
-    color: '#0C1016',
-    fontWeight: '800',
+    color: "#0C1016",
+    fontWeight: "800",
   },
   subtitle: {
     marginTop: 8,
     marginBottom: 24,
-    fontFamily: 'Inter',
-    textAlign: 'center',
+    fontFamily: "Inter",
+    textAlign: "center",
     fontSize: 12,
     lineHeight: 20,
-    color: '#333333',
-    fontWeight: '500',
+    color: "#333333",
+    fontWeight: "500",
     paddingHorizontal: 12,
   },
   label: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 15,
     lineHeight: 22,
-    color: '#0D0D0D',
-    fontWeight: '500',
+    color: "#0D0D0D",
+    fontWeight: "500",
     marginBottom: 6,
   },
   inputWrap: {
     height: 50,
     borderBottomWidth: 1,
-    borderBottomColor: '#D2D6DE',
-    flexDirection: 'row',
-    alignItems: 'center',
+    borderBottomColor: "#D2D6DE",
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
     marginBottom: 18,
   },
   input: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     flex: 1,
     fontSize: 15,
     lineHeight: 22,
-    color: '#111111',
+    color: "#111111",
   },
   passwordRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   forgotText: {
-    fontFamily: 'Inter',
-    color: '#0D8AF3',
-    fontWeight: '500',
+    fontFamily: "Inter",
+    color: "#0D8AF3",
+    fontWeight: "500",
     fontSize: 15,
     lineHeight: 22,
   },
@@ -237,87 +343,77 @@ const styles = StyleSheet.create({
     marginTop: 2,
     height: 45,
     borderRadius: 14,
-    backgroundColor: '#2F88E8',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#2F88E8",
+    justifyContent: "center",
+    alignItems: "center",
   },
   signInButtonDisabled: {
     opacity: 0.65,
   },
   signInText: {
-    fontFamily: 'Inter',
-    color: '#FFFFFF',
+    fontFamily: "Inter",
+    color: "#FFFFFF",
     fontSize: 20,
     lineHeight: 24,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   dividerWrap: {
     marginTop: 18,
     marginBottom: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#B4BBC7',
+    backgroundColor: "#B4BBC7",
   },
   dividerText: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 18,
     lineHeight: 15,
-    color: '#4F5971',
-    fontWeight: '500',
+    color: "#4F5971",
+    fontWeight: "500",
   },
   socialButton: {
     height: 45,
     borderRadius: 31,
     borderWidth: 1,
-    borderColor: '#B3BAC7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
+    borderColor: "#B3BAC7",
+    justifyContent: "center",
+    alignItems: "center",
+    flexDirection: "row",
     gap: 12,
-    backgroundColor: '#F7F8FA',
+    backgroundColor: "#F7F8FA",
     marginBottom: 10,
   },
   socialText: {
-    fontFamily: 'Inter',
-    color: '#111111',
+    fontFamily: "Inter",
+    color: "#111111",
     fontSize: 15,
     lineHeight: 23,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   bottomRow: {
     marginTop: 5,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
+    justifyContent: "center",
+    alignItems: "center",
+    flexDirection: "row",
     gap: 8,
   },
   bottomText: {
-    fontFamily: 'Inter',
-    color: '#3F3F3F',
+    fontFamily: "Inter",
+    color: "#3F3F3F",
     fontSize: 13,
     lineHeight: 21,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   createText: {
-    fontFamily: 'Inter',
-    color: '#0D8AF3',
+    fontFamily: "Inter",
+    color: "#0D8AF3",
     fontSize: 13,
     lineHeight: 21,
-    fontWeight: '500',
-  },
-  bottomArc: {
-    position: 'absolute',
-    width: 520,
-    height: 235,
-    borderRadius: 260,
-    backgroundColor: '#2F88E8',
-    left: -40,
-    bottom: -140,
-    opacity: 0.96,
+    fontWeight: "500",
   },
 });

@@ -1,62 +1,34 @@
 import { Feather, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
+import { useEffect, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 
-type Counselor = {
-  id: string;
-  name: string;
-  title: string;
-  tags: string[];
-  years: string;
-  rating: string;
-  avatar: string;
-  online?: boolean;
-};
+import { CounselorProfile, listCounselors } from '@/lib/counselors';
 
-const counselors: Counselor[] = [
-  {
-    id: '1',
-    name: 'Mrs. Dinithi jayawardane',
-    title: 'CLINICAL PSYCHOLOGIST',
-    tags: ['Anxiety', 'CBT', 'Depression'],
-    years: '12 years',
-    rating: '4.9',
-    avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=300&q=80',
-    online: true,
-  },
-  {
-    id: '2',
-    name: 'Mr. Anula Nikapitiya',
-    title: 'MARRIAGE & FAMILY THERAPIST',
-    tags: ['Relationships', 'Family', 'Stress'],
-    years: '8 years',
-    rating: '4.8',
-    avatar: 'https://images.unsplash.com/photo-1614436163996-25cee5f54290?auto=format&fit=crop&w=300&q=80',
-  },
-  {
-    id: '3',
-    name: 'Ms. jayani Mendis',
-    title: 'PSYCHIATRIST',
-    tags: ['Medication', 'Bipolar', 'PTSD'],
-    years: '15 years',
-    rating: '5',
-    avatar: 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?auto=format&fit=crop&w=300&q=80',
-  },
-  {
-    id: '4',
-    name: 'Mr. Nalaka Mendis',
-    title: 'HOLISTIC COUNSELOR',
-    tags: ['Mindfulness', 'Meditation', 'Grief'],
-    years: '6 years',
-    rating: '4.7',
-    avatar: 'https://images.unsplash.com/photo-1607746882042-944635dfe10e?auto=format&fit=crop&w=300&q=80',
-  },
-];
+const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=300&q=80';
 
 export default function CounselorsPage() {
+  const [counselors, setCounselors] = useState<CounselorProfile[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadCounselors = async () => {
+      try {
+        const nextCounselors = await listCounselors();
+        setCounselors(nextCounselors);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void loadCounselors();
+  }, []);
+
   return (
     <SafeAreaView style={styles.safeArea}>
+      <StatusBar style="dark" backgroundColor="#F1F4F7" translucent={false} />
       <View style={styles.container}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.headerRow}>
@@ -77,30 +49,33 @@ export default function CounselorsPage() {
           </View>
 
           <View style={styles.metaRow}>
-            <Text style={styles.metaLeft}>4 COUNSELORS AVAILABLE</Text>
+            <Text style={styles.metaLeft}>{isLoading ? 'LOADING COUNSELORS' : `${counselors.length} COUNSELORS AVAILABLE`}</Text>
             <TouchableOpacity activeOpacity={0.85}>
               <Text style={styles.metaRight}>Clear Filters</Text>
             </TouchableOpacity>
           </View>
 
+          {!isLoading && counselors.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>No counselors available yet</Text>
+              <Text style={styles.emptyText}>Completed counselor profiles saved in Firebase will appear here.</Text>
+            </View>
+          ) : null}
+
           {counselors.map((item) => (
-            <View key={item.id} style={styles.card}>
+            <View key={item.uid} style={styles.card}>
               <View style={styles.cardHeader}>
                 <View style={styles.avatarWrap}>
-                  <Image source={{ uri: item.avatar }} style={styles.avatar} />
-                  {item.online && <View style={styles.onlineDot} />}
+                  <Image source={{ uri: DEFAULT_AVATAR }} style={styles.avatar} />
+                  <View style={styles.onlineDot} />
                 </View>
                 <View style={styles.cardMain}>
                   <View style={styles.nameRow}>
-                    <Text style={styles.name}>{item.name}</Text>
-                    <View style={styles.ratingTag}>
-                      <Feather name="star" size={9} color="#E8A133" />
-                      <Text style={styles.ratingText}>{item.rating}</Text>
-                    </View>
+                    <Text style={styles.name}>{item.displayName || item.fullName}</Text>
                   </View>
-                  <Text style={styles.title}>{item.title}</Text>
+                  <Text style={styles.title}>{item.specialty.toUpperCase()}</Text>
                   <View style={styles.tagsRow}>
-                    {item.tags.map((tag) => (
+                    {(item.qualifications.length ? item.qualifications : ['Verified', 'Available']).slice(0, 2).map((tag) => (
                       <Text key={tag} style={styles.tagText}>
                         {tag}
                       </Text>
@@ -113,10 +88,11 @@ export default function CounselorsPage() {
               <View style={styles.infoRow}>
                 <View style={styles.infoPill}>
                   <MaterialCommunityIcons name="license" size={15} color="#6B7280" />
-                  <Text style={styles.infoText}>{item.years}</Text>
+                  <Text style={styles.infoText}>{item.qualifications.length || 1} credentials</Text>
                 </View>
                 <View style={styles.infoPill}>
                   <Feather name="clock" size={15} color="#6B7280" />
+                  <Text style={styles.infoText}>{item.bio ? 'Bio added' : 'Profile ready'}</Text>
                 </View>
               </View>
 
@@ -127,15 +103,11 @@ export default function CounselorsPage() {
                   router.push({
                     pathname: '/schedule-session',
                     params: {
-                      name: item.name,
-                      title: item.title
-                        .toLowerCase()
-                        .split(' ')
-                        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-                        .join(' '),
-                      years: item.years,
-                      avatar: item.avatar,
-                      tags: item.tags.slice(0, 2).join(','),
+                      name: item.displayName || item.fullName,
+                      title: item.specialty,
+                      years: `${Math.max(item.qualifications.length, 1)} credentials`,
+                      avatar: DEFAULT_AVATAR,
+                      tags: (item.qualifications.length ? item.qualifications : [item.specialty]).slice(0, 2).join(','),
                     },
                   })
                 }>
@@ -150,7 +122,7 @@ export default function CounselorsPage() {
             </View>
             <Text style={styles.verifiedTitle}>Verified Professionals</Text>
             <Text style={styles.verifiedText}>
-              All MindEase counselors are licensed practitioners with vetted credentials and background checks.
+              All Mindcare counselors are licensed practitioners with vetted credentials and background checks.
             </Text>
           </View>
         </ScrollView>
@@ -170,7 +142,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 12,
-    paddingTop: 8,
+    paddingTop: 20,
     paddingBottom: 86,
     gap: 10,
   },
@@ -185,10 +157,12 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: 'Inter',
-    fontSize: 12,
+    fontSize: 11,
     lineHeight: 15,
     color: '#343D4A',
     fontWeight: '800',
+    flex: 1,
+    textAlign: 'center',
   },
   headerFilter: {
     width: 18,
@@ -413,5 +387,27 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontWeight: '500',
     marginBottom: 5,
+  },
+  emptyCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#DEE4EC',
+    backgroundColor: '#FFFFFF',
+    padding: 18,
+    gap: 6,
+  },
+  emptyTitle: {
+    fontFamily: 'Inter',
+    fontSize: 15,
+    lineHeight: 20,
+    color: '#2A3340',
+    fontWeight: '700',
+  },
+  emptyText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#7A8494',
+    fontWeight: '500',
   },
 });
