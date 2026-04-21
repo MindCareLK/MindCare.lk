@@ -119,11 +119,11 @@ export default function DiscoverArticlesPage() {
                     </View>
                   </View>
                   <TouchableOpacity 
-                    style={styles.readBtn}
-                    onPress={() => router.push(`/article-detail?id=${item.id}` as any)}
-                  >
+                    style={styles.readBtn} 
+                    onPress={() => router.push('/article_detail')}
+                >
                     <Text style={styles.readText}>Read →</Text>
-                  </TouchableOpacity>
+                    </TouchableOpacity>
                 </View>
               </View>
             </TouchableOpacity>
