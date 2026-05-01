@@ -63,9 +63,9 @@ export default function RoleSelectionScreen() {
             <TouchableOpacity key={card.id} style={styles.card} activeOpacity={0.92} onPress={() => handlePressCard(card.id)}>
               <View style={[styles.iconWrap, { backgroundColor: card.iconBackground }]}>
                 {card.id === 'member' ? (
-                  <Ionicons name={card.icon} size={30} color={card.iconColor} />
+                  <Ionicons name={card.icon as 'heart'} size={30} color={card.iconColor} />
                 ) : (
-                  <MaterialCommunityIcons name={card.icon} size={32} color={card.iconColor} />
+                  <MaterialCommunityIcons name={card.icon as 'stethoscope'} size={32} color={card.iconColor} />
                 )}
               </View>
 
