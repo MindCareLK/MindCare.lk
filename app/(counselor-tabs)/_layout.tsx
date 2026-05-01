@@ -24,7 +24,7 @@ export default function CounselorTabsLayout() {
           fontWeight: '500',
           marginTop: 3,
         },
-        tabBarActiveTintColor: '#30353B',
+        tabBarActiveTintColor: '#2F88E8',
         tabBarInactiveTintColor: '#8E969F',
         sceneStyle: {
           backgroundColor: '#F3F5F8',
