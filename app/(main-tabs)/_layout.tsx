@@ -25,7 +25,7 @@ export default function MainTabsLayout() {
           fontWeight: '500',
           marginTop: 8,
         },
-        tabBarActiveTintColor: '#30353B',
+        tabBarActiveTintColor: '#2F88E8',
         tabBarInactiveTintColor: '#8E969F',
         sceneStyle: {
           backgroundColor: '#FFFFFF',
@@ -40,9 +40,6 @@ export default function MainTabsLayout() {
           if (route.name === 'counselors') {
             return <Feather name="users" size={16} color={color} />;
           }
-          if (route.name === 'articles') {
-            return <Feather name="book-open" size={16} color={color} />;
-          }
 
           return <Feather name="user" size={16} color={color} />;
         },
@@ -50,8 +47,12 @@ export default function MainTabsLayout() {
       <Tabs.Screen name="home" options={{ title: 'Home' }} />
       <Tabs.Screen name="ai-chat" options={{ title: 'Chat' }} />
       <Tabs.Screen name="counselors" options={{ title: 'Counselors' }} />
-      <Tabs.Screen name="articles" options={{ title: 'Articles' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
+      <Tabs.Screen name="articles" options={{ href: null }} />
+      <Tabs.Screen name="articles_BACKUP_510" options={{ href: null }} />
+      <Tabs.Screen name="articles_BASE_510" options={{ href: null }} />
+      <Tabs.Screen name="articles_LOCAL_510" options={{ href: null }} />
+      <Tabs.Screen name="articles_REMOTE_510" options={{ href: null }} />
     </Tabs>
   );
 }
