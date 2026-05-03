@@ -9,18 +9,23 @@ import "react-native-reanimated";
 
 import { AuthProvider } from "@/components/AuthContext";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import * as SplashScreen from "expo-splash-screen"; 
+import { useEffect } from "react";
 
-export const unstable_settings = {
-  anchor: "(main-tabs)",
-};
+SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+
+  useEffect(() => {
+    SplashScreen.hideAsync(); // 👈 hides native splash once JS is ready
+  }, []);
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <AuthProvider>
         <Stack>
+          <Stack.Screen name="splash" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="(main-tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="(counselor-tabs)" options={{ headerShown: false }} />
