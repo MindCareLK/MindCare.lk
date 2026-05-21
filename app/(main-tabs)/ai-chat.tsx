@@ -127,7 +127,7 @@ export default function AiChatPage() {
   );
 
   // FIXED: Standardize model path to production identifier string
-  const GEMINI_API_KEY = "AIzaSyCFIn9ZKuNTtOrT3AUy5n0bdH9vHa-HaG8";
+  const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
   const GEMINI_MODEL = "gemini-2.5-flash";
 
   // FIXED: Standardized chat configuration mapping logic
@@ -372,7 +372,11 @@ export default function AiChatPage() {
                   </View>
                 ))}
 
-                <View style={styles.quickActions}>
+                
+              </>
+            )}
+          </ScrollView>
+          <View style={styles.quickActions}>
                   <TouchableOpacity
                     style={styles.quickChip}
                     activeOpacity={0.85}
@@ -412,9 +416,6 @@ export default function AiChatPage() {
                     <Text style={styles.quickChipText}>Find Help</Text>
                   </TouchableOpacity>
                 </View>
-              </>
-            )}
-          </ScrollView>
 
           {isAssessmentComplete && (
             <View style={styles.inputBar}>
@@ -466,7 +467,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingBottom: 140,
+    paddingBottom: 16,
     gap: 12,
   },
   headerRow: {
