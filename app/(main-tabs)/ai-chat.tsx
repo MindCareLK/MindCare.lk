@@ -610,11 +610,14 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     gap: 8,
     marginTop: 12,
+    paddingRight: 40,
+    width: "100%",
   },
   messageRowRight: {
     alignSelf: "flex-end",
     marginTop: 12,
     maxWidth: "85%",
+    paddingLeft: 30,
   },
   avatarDot: {
     width: 20,
@@ -625,6 +628,7 @@ const styles = StyleSheet.create({
     borderColor: "#C8D8F5",
   },
   botBubble: {
+    flex: 1,
     borderRadius: 16,
     backgroundColor: "#EAF1FB",
     paddingHorizontal: 14,
