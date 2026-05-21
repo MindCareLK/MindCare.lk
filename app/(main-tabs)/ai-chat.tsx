@@ -372,7 +372,11 @@ export default function AiChatPage() {
                   </View>
                 ))}
 
-                <View style={styles.quickActions}>
+                
+              </>
+            )}
+          </ScrollView>
+          <View style={styles.quickActions}>
                   <TouchableOpacity
                     style={styles.quickChip}
                     activeOpacity={0.85}
@@ -412,9 +416,6 @@ export default function AiChatPage() {
                     <Text style={styles.quickChipText}>Find Help</Text>
                   </TouchableOpacity>
                 </View>
-              </>
-            )}
-          </ScrollView>
 
           {isAssessmentComplete && (
             <View style={styles.inputBar}>
@@ -466,7 +467,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingBottom: 140,
+    paddingBottom: 16,
     gap: 12,
   },
   headerRow: {
