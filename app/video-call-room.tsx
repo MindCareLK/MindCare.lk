@@ -1,8 +1,25 @@
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { ImageBackground, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  ImageBackground,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  Platform,
+  Image,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+// import { RTCView } from 'react-native-webrtc';
+let RTCView: any;
+
+if (Platform.OS !== 'web') {
+  RTCView = require('react-native-webrtc').RTCView;
+}
+import { getLocalStream } from '@/services/webrtc';
 
 type VideoCallRoomParams = {
   patient?: string | string[];
@@ -10,20 +27,74 @@ type VideoCallRoomParams = {
   specialty?: string | string[];
 };
 
-const toSingleValue = (value: string | string[] | undefined): string =>
-  typeof value === 'string' ? value : Array.isArray(value) ? value[0] ?? '' : '';
+const toSingleValue = (
+  value: string | string[] | undefined
+): string =>
+  typeof value === 'string'
+    ? value
+    : Array.isArray(value)
+    ? value[0] ?? ''
+    : '';
 
 export default function VideoCallRoomScreen() {
   const params = useLocalSearchParams<VideoCallRoomParams>();
-  const patientName = toSingleValue(params.patient) || 'Deepika Gunawardana';
-  const counselorName = toSingleValue(params.name) || 'Counselor';
-  const specialty = toSingleValue(params.specialty) || 'General Counseling';
+
+  const patientName =
+    toSingleValue(params.patient) || 'Deepika Gunawardana';
+
+  const counselorName =
+    toSingleValue(params.name) || 'Counselor';
+
+  const specialty =
+    toSingleValue(params.specialty) || 'General Counseling';
+
+  // LOCAL STREAM STATE
+  const [localStream, setLocalStream] = useState<any>(null);
+
+  // LOAD CAMERA + MIC
+  useEffect(() => {
+    const startLocalStream = async () => {
+      try {
+        const stream = await getLocalStream();
+
+        if (stream) {
+          setLocalStream(stream);
+        }
+      } catch (error) {
+        console.log('Stream error:', error);
+      }
+    };
+
+    startLocalStream();
+
+    // CLEANUP
+    return () => {
+      if (localStream) {
+        localStream.getTracks().forEach((track: any) => {
+          track.stop();
+        });
+      }
+    };
+  }, []);
 
   const handleEndCall = () => {
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    void Haptics.notificationAsync(
+      Haptics.NotificationFeedbackType.Warning
+    );
+
+    // STOP STREAM WHEN ENDING CALL
+    if (localStream) {
+      localStream.getTracks().forEach((track: any) => {
+        track.stop();
+      });
+    }
+
     router.replace({
       pathname: '/(counselor-tabs)/overview',
-      params: { name: counselorName, specialty },
+      params: {
+        name: counselorName,
+        specialty,
+      },
     });
   };
 
@@ -37,58 +108,140 @@ export default function VideoCallRoomScreen() {
             uri: 'https://images.unsplash.com/photo-1582750433449-648ed127bb54?auto=format&fit=crop&w=1200&q=80',
           }}
           style={styles.callStage}
-          imageStyle={styles.callBackgroundImage}>
+          imageStyle={styles.callBackgroundImage}
+        >
           <View style={styles.overlay} />
 
+          {/* TOP BAR */}
           <View style={styles.topInfoBar}>
             <View style={styles.topLeft}>
               <View style={styles.greenDot} />
               <Text style={styles.topName}>{patientName}</Text>
             </View>
+
             <View style={styles.topRight}>
               <View style={styles.redDot} />
               <Text style={styles.timerText}>04:22</Text>
             </View>
           </View>
 
-          <View style={styles.remotePreview}>
-            <ImageBackground
-              source={{
-                uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=600&q=80',
-              }}
-              style={styles.remotePreviewImage}
-              imageStyle={styles.remotePreviewImageStyle}
-            />
-          </View>
+          {/* LOCAL CAMERA PREVIEW */}
+          {/* <View style={styles.remotePreview}>
+            {localStream ? (
+              <RTCView
+                streamURL={localStream.toURL()}
+                style={styles.remoteRTCView}
+                objectFit="cover"
+              />
+            ) : (
+              <View style={styles.loadingPreview}>
+                <Text style={styles.loadingText}>
+                  Loading Camera...
+                </Text>
+              </View>
+            )}
+          </View>*/}
 
-          <TouchableOpacity style={styles.audioOnlyButton} activeOpacity={0.85}>
-            <Feather name="headphones" size={16} color="#FFFFFF" />
-            <Text style={styles.audioOnlyText}>Switch to Audio-Only</Text>
+          <View style={styles.remotePreview}>
+  {Platform.OS === 'web' ? (
+    // WEB PLACEHOLDER
+    <Image
+      source={{
+        uri: 'https://your-placeholder-image.jpg',
+      }}
+      style={{ width: '100%', height: '100%' }}
+    />
+  ) : localStream ? (
+    // REAL MOBILE CAMERA
+    <RTCView
+      streamURL={localStream.toURL()}
+      style={{ flex: 1 }}
+      objectFit="cover"
+    />
+  ) : null}
+</View>
+
+          {/* AUDIO ONLY BUTTON */}
+          <TouchableOpacity
+            style={styles.audioOnlyButton}
+            activeOpacity={0.85}
+          >
+            <Feather
+              name="headphones"
+              size={16}
+              color="#FFFFFF"
+            />
+
+            <Text style={styles.audioOnlyText}>
+              Switch to Audio-Only
+            </Text>
           </TouchableOpacity>
 
+          {/* CONTROLS */}
           <View style={styles.controlDock}>
-            <TouchableOpacity style={styles.controlItem} activeOpacity={0.85}>
-              <Feather name="mic-off" size={18} color="#DCE4F2" />
+            <TouchableOpacity
+              style={styles.controlItem}
+              activeOpacity={0.85}
+            >
+              <Feather
+                name="mic-off"
+                size={18}
+                color="#DCE4F2"
+              />
+
               <Text style={styles.controlLabel}>MIC</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.controlItem} activeOpacity={0.85}>
-              <Feather name="video-off" size={18} color="#DCE4F2" />
+            <TouchableOpacity
+              style={styles.controlItem}
+              activeOpacity={0.85}
+            >
+              <Feather
+                name="video-off"
+                size={18}
+                color="#DCE4F2"
+              />
+
               <Text style={styles.controlLabel}>VIDEO</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={[styles.controlItem, styles.endItem]} activeOpacity={0.85} onPress={handleEndCall}>
-              <MaterialCommunityIcons name="phone-hangup" size={18} color="#FFFFFF" />
+            <TouchableOpacity
+              style={[styles.controlItem, styles.endItem]}
+              activeOpacity={0.85}
+              onPress={handleEndCall}
+            >
+              <MaterialCommunityIcons
+                name="phone-hangup"
+                size={18}
+                color="#FFFFFF"
+              />
+
               <Text style={styles.controlLabel}>END</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.controlItem} activeOpacity={0.85}>
-              <Ionicons name="stats-chart-outline" size={18} color="#DCE4F2" />
+            <TouchableOpacity
+              style={styles.controlItem}
+              activeOpacity={0.85}
+            >
+              <Ionicons
+                name="stats-chart-outline"
+                size={18}
+                color="#DCE4F2"
+              />
+
               <Text style={styles.controlLabel}>SIGNAL</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.controlItem} activeOpacity={0.85}>
-              <Feather name="more-horizontal" size={18} color="#DCE4F2" />
+            <TouchableOpacity
+              style={styles.controlItem}
+              activeOpacity={0.85}
+            >
+              <Feather
+                name="more-horizontal"
+                size={18}
+                color="#DCE4F2"
+              />
+
               <Text style={styles.controlLabel}>MORE</Text>
             </TouchableOpacity>
           </View>
@@ -103,10 +256,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#E7EDF6',
   },
+
   screen: {
     flex: 1,
     backgroundColor: '#E7EDF6',
   },
+
   pageLabel: {
     marginTop: 2,
     marginLeft: 10,
@@ -116,6 +271,7 @@ const styles = StyleSheet.create({
     color: '#699CE8',
     fontWeight: '500',
   },
+
   callStage: {
     flex: 1,
     margin: 8,
@@ -123,13 +279,16 @@ const styles = StyleSheet.create({
     borderColor: '#2F88E8',
     overflow: 'hidden',
   },
+
   callBackgroundImage: {
     opacity: 0.72,
   },
+
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(25, 41, 63, 0.42)',
   },
+
   topInfoBar: {
     marginTop: 10,
     marginHorizontal: 16,
@@ -141,28 +300,33 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 10,
   },
+
   topLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
+
   topRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
+
   greenDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: '#2AC769',
   },
+
   redDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: '#F04444',
   },
+
   topName: {
     fontFamily: 'Inter',
     fontSize: 14,
@@ -170,6 +334,7 @@ const styles = StyleSheet.create({
     color: '#1E2736',
     fontWeight: '500',
   },
+
   timerText: {
     fontFamily: 'Inter',
     fontSize: 14,
@@ -177,6 +342,7 @@ const styles = StyleSheet.create({
     color: '#1E2736',
     fontWeight: '700',
   },
+
   remotePreview: {
     position: 'absolute',
     top: 78,
@@ -189,12 +355,22 @@ const styles = StyleSheet.create({
     borderColor: '#0D1626',
     backgroundColor: '#0D1626',
   },
-  remotePreviewImage: {
+
+  remoteRTCView: {
     flex: 1,
   },
-  remotePreviewImageStyle: {
-    borderRadius: 12,
+
+  loadingPreview: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
+
+  loadingText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+  },
+
   audioOnlyButton: {
     position: 'absolute',
     bottom: 124,
@@ -209,6 +385,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+
   audioOnlyText: {
     fontFamily: 'Inter',
     fontSize: 13,
@@ -216,6 +393,7 @@ const styles = StyleSheet.create({
     color: '#F1F6FF',
     fontWeight: '500',
   },
+
   controlDock: {
     position: 'absolute',
     left: 20,
@@ -231,17 +409,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     paddingHorizontal: 8,
   },
+
   controlItem: {
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
   },
+
   endItem: {
     width: 46,
     height: 46,
     borderRadius: 23,
     backgroundColor: '#FF2E6E',
   },
+
   controlLabel: {
     fontFamily: 'Inter',
     fontSize: 9,
