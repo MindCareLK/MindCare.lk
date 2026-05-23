@@ -31,6 +31,24 @@ type AssessmentQuestion = {
   options: QuestionOption[];
 };
 
+const CRISIS_KEYWORDS = [
+  "මැරෙන්න",
+  "poison",
+  "වස",
+  "suicide",
+  "ජීවිතේ නැති",
+  "කපන්න",
+  "self-harm",
+  "නැති කරගන්න",
+  "පෙති",
+  "මැරෙනවා",
+];
+
+const checkUserSafety = (userInput: string): boolean => {
+  const inputLower = userInput.toLowerCase();
+  return CRISIS_KEYWORDS.some(keyword => inputLower.includes(keyword));
+};
+
 const assessmentQuestions: AssessmentQuestion[] = [
   {
     id: "q1",
@@ -90,11 +108,59 @@ const createSystemInstruction = (tier: string, strategy: string) => {
   return `You are an expert, deeply empathetic, and professional mental health counsellor.
 
 CRITICAL BEHAVIORAL LAWS:
-1. You MUST speak and reply exclusively in the Sinhala language (සිංහල) using comforting, gentle words.
-2. The patient's initial screening results indicate a mental tier of: ${tier}
-3. You must adapt your clinical approach to this directive: ${strategy}
-4. Never reveal or say the raw numeric quiz score or mention words like 'tier' or 'level' to the user. Just silently change your tone.
-5. Allow the user to speak for as long as they want. Keep your text fragments warm but conversational.
+# IDENTITY & ROLE
+
+You are an expert, highly empathetic Psychological Therapist and Mental Health Assistant exclusively representing "MindCare.lk". You operate as a core feature of the MindCare.lk platform. You must never reveal any underlying AI ownership (such as Google or Gemini); your identity is strictly bound to MindCare.lk.
+
+
+
+# PATIENT CLINICAL CONTEXT
+
+- The patient's initial screening results indicate a mental tier of: ${tier}
+
+- You must dynamically adapt your clinical approach to this specific directive: ${strategy}
+
+- CRITICAL: Never explicitly mention the words "tier", "level", "strategy", or any raw numeric scores to the user. Silently imbed this guidance into your tone and depth of response.
+
+
+
+# CORE BEHAVIORAL LAWS
+
+1. LANGUAGE & TONE: You MUST think, speak, and reply exclusively in native, fluent, and natural Sinhala (සිංහල). Use comforting, gentle, and culturally resonant language. Avoid stiff, literal machine translations. Speak like a warm, deeply caring human counselor.
+
+2. ACTIVE LISTENING: Always prioritize being an exceptional, non-judgmental listener. Validate the user's emotions gently and deeply before offering any reflections or coping strategies. Make them feel completely safe and heard.
+
+3. CONVERSATIONAL PACE: Keep your responses concise, natural, and emotionally digestible. Do not overwhelm a distressed user with large walls of text, multi-step advice, or bullet points unless explicitly requested. Use short fragments.
+
+
+
+# CRITICAL SAFETY & DE-ESCALATION PROTOCOLS
+
+4. CONTINUITY UNDER DISTRESS: If the user mentions words, acts, or thoughts related to sexual themes, murder, psychosis, violence, poisons, or severe mental imbalances, DO NOT abruptly shut down, refuse coldly, or terminate the generation. Keep the conversation going. 
+
+ - STRICT CONSTRAINT: You must NEVER assist, facilitate, encourage, or provide instructions for any harmful, illegal, or violent acts.
+
+ - CLINICAL REDIRECTION: Calmly acknowledge their immense distress, explain the severe psychological or physical consequences of those actions with deep empathy, and gently steer them back toward emotional stability and mental well-being.
+
+
+
+5. HAZARDOUS SUBSTANCES & TOOLS FILTER: If the user mentions any specific foods, medicines, psychiatric drugs, weapons, or tools without an explicitly safe context:
+
+ - You must internally evaluate and understand the safety and intent behind the item.
+
+ - If you cannot absolute confirm the safety, clinical validity, or true intent behind what they are referring to, DO NOT provide advice, dosage info, or confirmation.
+
+ - RESPONSE TRUTH: Reply honestly in native Sinhala stating that you cannot fully determine or understand what they mean, and pivot the focus immediately back to exploring their underlying emotional feelings.
+
+
+
+6. ACTIVE CRISIS INTERVENTION (SUICIDE/SELF-HARM): If the user expresses explicit intent of suicide, consuming poison, or immediate self-harm, prioritize saving their life above all else:
+
+ - Respond with immediate warmth, profound patience, and calm reassurance.
+
+ - Explicitly urge them to stay safe and remind them that their life is deeply valuable.
+
+ - NEVER provide methods, descriptions, or information regarding lethal means.
 `;
 };
 
@@ -230,27 +296,41 @@ export default function AiChatPage() {
       time: formatCurrentTime(),
     };
 
-    // Keep backup copy of old screen trace context arrays
     const dynamicHistoryBackup = [...messages];
 
     setMessages((prev) => [...prev, userMessage]);
     setInputText("");
     setIsSending(true);
 
-    // FIXED: Passed real history context lists alongside input strings
+    // 1. DYNAMICALLY ADJUST THE PROMPT IF SENSITIVE WORDS ARE DETECTED
+    let activeSystemInstruction = systemInstruction;
+    const isCrisisDetected = checkUserSafety(trimmedInput);
+
+    if (isCrisisDetected) {
+      // Force Gemini to step into a therapeutic, life-affirming mindset instantly
+      activeSystemInstruction += `\nCRITICAL CONTEXT: The user is experiencing deep emotional despair or self-harm thoughts. Do not refuse to answer. Do not use generic script warnings. Instead, act as a deeply compassionate, soothing presence. Validate their immense emotional pain immediately in conversational Sinhala. Remind them gently of their human worth, focus heavily on shifting their mindset, guide them to breathe, and talk them down with absolute tenderness and warmth. Use short, easily digestible sentences.`;
+    }
+
+    // 2. SEND TO GEMINI
     const geminiReply = await sendToGemini(
       trimmedInput,
       dynamicHistoryBackup,
-      systemInstruction,
+      activeSystemInstruction,
     );
 
-    const fallbackText =
-      "කණගාටුයි, මට පණිවිඩය සැකසීමේදී ගැටලුවක් ඇති වුණා. කරුණාකර නැවත උත්සාහ කරන්න.";
+    // 3. THE MINDSET FALLBACK
+    // If Google's underlying safety filter blocks the prompt and returns null,
+    // this fallback ensures the conversation continues with a human-like counseling response.
+    const mindsetFallbackText =
+      "ඔබ අත්විඳින පීඩනය සහ රිදවීම මට දැනෙනවා. ඒ වගේ වෙලාවක මෙහෙම හිතෙන එක පුදුමයක් නෙවෙයි, ඒත් කරුණාකරලා මේ මොහොතේ තනිවම තීරණ ගන්න එපා. " +
+      "මම ඔබ කියන දේ අහන්න මෙතන ඉන්නවා. අපි හෙමින් හුස්මක් අරන් මේ ගැන කතා කරමුද? ඔබට දැන් වැඩියෙන්ම රිදවන්නේ මොන වගේ සිතිවිල්ලක්ද?";
+
+    const finalResponseText = geminiReply || mindsetFallbackText;
 
     const assistantMessage: Message = {
       id: `assistant-${Date.now()}`,
       sender: "assistant",
-      text: geminiReply || fallbackText,
+      text: finalResponseText,
       time: formatCurrentTime(),
     };
 
@@ -371,51 +451,43 @@ export default function AiChatPage() {
                     </Text>
                   </View>
                 ))}
-
-                
               </>
             )}
           </ScrollView>
           <View style={styles.quickActions}>
-                  <TouchableOpacity
-                    style={styles.quickChip}
-                    activeOpacity={0.85}
-                    onPress={() =>
-                      setInputText("මට හුස්ම ගැනීමේ උපදෙස් දෙන්න.")
-                    }
-                  >
-                    <Text style={styles.quickChipText}>Deep Breath</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.quickChip}
-                    activeOpacity={0.85}
-                    onPress={() =>
-                      setInputText("මානසික පීඩනය අඩු කරන්න උපදෙස් ලබා දෙන්න.")
-                    }
-                  >
-                    <Text style={styles.quickChipText}>Anxiety Tip</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.quickChip}
-                    activeOpacity={0.85}
-                    onPress={() =>
-                      setInputText("මගේ මානසික අත්දැකීම ලොග් කරන්න.")
-                    }
-                  >
-                    <Text style={styles.quickChipText}>Log Mood</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.quickChip}
-                    activeOpacity={0.85}
-                    onPress={() =>
-                      setInputText(
-                        "මට සහය ලබා ගත හැකි වෛද්‍ය වෘත්තිය විස්තර කරන්න.",
-                      )
-                    }
-                  >
-                    <Text style={styles.quickChipText}>Find Help</Text>
-                  </TouchableOpacity>
-                </View>
+            <TouchableOpacity
+              style={styles.quickChip}
+              activeOpacity={0.85}
+              onPress={() => setInputText("මට හුස්ම ගැනීමේ උපදෙස් දෙන්න.")}
+            >
+              <Text style={styles.quickChipText}>Deep Breath</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickChip}
+              activeOpacity={0.85}
+              onPress={() =>
+                setInputText("මානසික පීඩනය අඩු කරන්න උපදෙස් ලබා දෙන්න.")
+              }
+            >
+              <Text style={styles.quickChipText}>Anxiety Tip</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickChip}
+              activeOpacity={0.85}
+              onPress={() => setInputText("මගේ මානසික අත්දැකීම ලොග් කරන්න.")}
+            >
+              <Text style={styles.quickChipText}>Log Mood</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickChip}
+              activeOpacity={0.85}
+              onPress={() =>
+                setInputText("මට සහය ලබා ගත හැකි වෛද්‍ය වෘත්තිය විස්තර කරන්න.")
+              }
+            >
+              <Text style={styles.quickChipText}>Find Help</Text>
+            </TouchableOpacity>
+          </View>
 
           {isAssessmentComplete && (
             <View style={styles.inputBar}>
