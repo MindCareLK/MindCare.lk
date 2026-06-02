@@ -8,18 +8,9 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Platform,
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-// import { RTCView } from 'react-native-webrtc';
-let RTCView: any;
-
-if (Platform.OS !== 'web') {
-  RTCView = require('react-native-webrtc').RTCView;
-}
-import { getLocalStream } from '@/services/webrtc';
 
 type VideoCallRoomParams = {
   patient?: string | string[];
@@ -48,46 +39,10 @@ export default function VideoCallRoomScreen() {
   const specialty =
     toSingleValue(params.specialty) || 'General Counseling';
 
-  // LOCAL STREAM STATE
-  const [localStream, setLocalStream] = useState<any>(null);
-
-  // LOAD CAMERA + MIC
-  useEffect(() => {
-    const startLocalStream = async () => {
-      try {
-        const stream = await getLocalStream();
-
-        if (stream) {
-          setLocalStream(stream);
-        }
-      } catch (error) {
-        console.log('Stream error:', error);
-      }
-    };
-
-    startLocalStream();
-
-    // CLEANUP
-    return () => {
-      if (localStream) {
-        localStream.getTracks().forEach((track: any) => {
-          track.stop();
-        });
-      }
-    };
-  }, []);
-
   const handleEndCall = () => {
     void Haptics.notificationAsync(
       Haptics.NotificationFeedbackType.Warning
     );
-
-    // STOP STREAM WHEN ENDING CALL
-    if (localStream) {
-      localStream.getTracks().forEach((track: any) => {
-        track.stop();
-      });
-    }
 
     router.replace({
       pathname: '/(counselor-tabs)/overview',
@@ -125,41 +80,14 @@ export default function VideoCallRoomScreen() {
             </View>
           </View>
 
-          {/* LOCAL CAMERA PREVIEW */}
-          {/* <View style={styles.remotePreview}>
-            {localStream ? (
-              <RTCView
-                streamURL={localStream.toURL()}
-                style={styles.remoteRTCView}
-                objectFit="cover"
-              />
-            ) : (
-              <View style={styles.loadingPreview}>
-                <Text style={styles.loadingText}>
-                  Loading Camera...
-                </Text>
-              </View>
-            )}
-          </View>*/}
-
-          <View style={styles.remotePreview}>
-  {Platform.OS === 'web' ? (
-    // WEB PLACEHOLDER
-    <Image
-      source={{
-        uri: 'https://your-placeholder-image.jpg',
-      }}
-      style={{ width: '100%', height: '100%' }}
-    />
-  ) : localStream ? (
-    // REAL MOBILE CAMERA
-    <RTCView
-      streamURL={localStream.toURL()}
-      style={{ flex: 1 }}
-      objectFit="cover"
-    />
-  ) : null}
-</View>
+         <View style={styles.remotePreview}>
+            <Image
+              source={{
+                uri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=500',
+              }}
+              style={{ width: '100%', height: '100%' }}
+            />
+          </View>
 
           {/* AUDIO ONLY BUTTON */}
           <TouchableOpacity
