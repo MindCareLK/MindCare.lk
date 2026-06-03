@@ -1,6 +1,6 @@
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ImageBackground,
@@ -8,14 +8,22 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import {
+  MediaStream,
+  RTCView,
+  mediaDevices,
+} from 'react-native-webrtc';
 
 type VideoCallRoomParams = {
   patient?: string | string[];
   name?: string | string[];
   specialty?: string | string[];
+
+  roomId?: string | string[];
+  role?: string | string[];
 };
 
 const toSingleValue = (
@@ -30,18 +38,113 @@ const toSingleValue = (
 export default function VideoCallRoomScreen() {
   const params = useLocalSearchParams<VideoCallRoomParams>();
 
+        const roomId =
+        toSingleValue(params.roomId);
+
+      const role =
+        toSingleValue(params.role);
+
+        const toggleMic = () => {
+        if (!localStream) return;
+
+        localStream
+          .getAudioTracks()
+          .forEach((track: any) => {
+            track.enabled = !track.enabled;
+          });
+
+        setMicEnabled((prev) => !prev);
+      };
+
+      const toggleCamera = () => {
+        if (!localStream) return;
+
+        localStream
+          .getVideoTracks()
+          .forEach((track: any) => {
+            track.enabled = !track.enabled;
+          });
+
+          setCameraEnabled((prev) => !prev);
+        };
+
+  const [micEnabled, setMicEnabled] =
+    useState(true);
+
+  const [cameraEnabled, setCameraEnabled] =
+    useState(true);
+
+  const [seconds, setSeconds] =
+    useState(0);
+
   const patientName =
-    toSingleValue(params.patient) || 'Deepika Gunawardana';
+    toSingleValue(params.patient) || 'Patient';
 
   const counselorName =
     toSingleValue(params.name) || 'Counselor';
 
   const specialty =
-    toSingleValue(params.specialty) || 'General Counseling';
+    toSingleValue(params.specialty) ||
+    'General Counseling';
+
+  const [localStream, setLocalStream] =
+    useState<any>(null);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSeconds((prev) => prev + 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const formattedTime =
+    Math.floor(seconds / 60)
+      .toString()
+      .padStart(2, '0') +
+    ':' +
+    (seconds % 60)
+      .toString()
+      .padStart(2, '0');
+
+  useEffect(() => {
+    let stream: MediaStream | null = null;
+
+    const startCamera = async () => {
+      try {
+        stream =
+          await mediaDevices.getUserMedia({
+            audio: true,
+            video: true,
+            // video: {
+            //   facingMode: 'user',
+          });
+
+        setLocalStream(stream);
+      } catch (error) {
+        console.log(
+          'Camera Error:',
+          error
+        );
+      }
+    };
+
+    startCamera();
+  
+    return () => {
+      stream?.getTracks().forEach((track: any) =>
+       track.stop()
+      );
+    };
+  }, []);
 
   const handleEndCall = () => {
     void Haptics.notificationAsync(
       Haptics.NotificationFeedbackType.Warning
+    );
+
+    localStream?.getTracks().forEach((track: any) =>
+      track.stop()
     );
 
     router.replace({
@@ -56,43 +159,91 @@ export default function VideoCallRoomScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.screen}>
-        <Text style={styles.pageLabel}>Video Call Room</Text>
+        <Text style={styles.pageLabel}>
+          Video Call Room
+        </Text>
 
         <ImageBackground
           source={{
             uri: 'https://images.unsplash.com/photo-1582750433449-648ed127bb54?auto=format&fit=crop&w=1200&q=80',
           }}
           style={styles.callStage}
-          imageStyle={styles.callBackgroundImage}
+          imageStyle={
+            styles.callBackgroundImage
+          }
         >
           <View style={styles.overlay} />
 
-          {/* TOP BAR */}
           <View style={styles.topInfoBar}>
             <View style={styles.topLeft}>
               <View style={styles.greenDot} />
-              <Text style={styles.topName}>{patientName}</Text>
+              <Text style={styles.topName}>
+                {patientName}
+              </Text>
             </View>
 
             <View style={styles.topRight}>
               <View style={styles.redDot} />
-              <Text style={styles.timerText}>04:22</Text>
+              <Text style={styles.timerText}>
+                {formattedTime}
+              </Text>
             </View>
           </View>
 
-         <View style={styles.remotePreview}>
-            <Image
-              source={{
-                uri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=500',
+          <View
+                    style={{
+                      position: 'absolute',
+                      top: 50,
+                      left: 20,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: '#FFF',
+                        fontSize: 12,
+                      }}
+                    >
+                      Room: {roomId}
+                    </Text>
+
+                    <Text
+                      style={{
+                        color: '#FFF',
+                        fontSize: 12,
+                      }}
+                    >
+                      Role: {role}
+                    </Text>
+                  </View>
+          <View style={styles.remotePreview}>
+            {localStream ? (
+
+             <RTCView
+              streamURL={localStream.toURL()}
+              style={{
+                width: 88,
+                height: 128,
               }}
-              style={{ width: '100%', height: '100%' }}
+              mirror={true}
+              objectFit="cover"
             />
+            ) : (
+              <View
+                style={
+                  styles.loadingPreview
+                }
+              >
+                <Text
+                  style={styles.loadingText}
+                >
+                  Starting Camera...
+                </Text>
+              </View>
+            )}
           </View>
 
-          {/* AUDIO ONLY BUTTON */}
           <TouchableOpacity
             style={styles.audioOnlyButton}
-            activeOpacity={0.85}
           >
             <Feather
               name="headphones"
@@ -100,42 +251,55 @@ export default function VideoCallRoomScreen() {
               color="#FFFFFF"
             />
 
-            <Text style={styles.audioOnlyText}>
+            <Text
+              style={styles.audioOnlyText}
+            >
               Switch to Audio-Only
             </Text>
           </TouchableOpacity>
 
-          {/* CONTROLS */}
           <View style={styles.controlDock}>
             <TouchableOpacity
               style={styles.controlItem}
-              activeOpacity={0.85}
             >
               <Feather
-                name="mic-off"
+                name={micEnabled ? 'mic' : 'mic-off'}
                 size={18}
                 color="#DCE4F2"
-              />
 
-              <Text style={styles.controlLabel}>MIC</Text>
+                onPress={() =>
+                  setMicEnabled(!micEnabled)
+                }
+              />
+              <Text
+                style={styles.controlLabel}
+              >
+                MIC
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.controlItem}
-              activeOpacity={0.85}
+              onPress={toggleMic}
             >
               <Feather
-                name="video-off"
+                name={cameraEnabled ? 'video' : 'video-off'}
                 size={18}
                 color="#DCE4F2"
+               onPress={toggleCamera}
               />
-
-              <Text style={styles.controlLabel}>VIDEO</Text>
+              <Text
+                style={styles.controlLabel}
+              >
+                VIDEO
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.controlItem, styles.endItem]}
-              activeOpacity={0.85}
+              style={[
+                styles.controlItem,
+                styles.endItem,
+              ]}
               onPress={handleEndCall}
             >
               <MaterialCommunityIcons
@@ -144,42 +308,50 @@ export default function VideoCallRoomScreen() {
                 color="#FFFFFF"
               />
 
-              <Text style={styles.controlLabel}>END</Text>
+              <Text
+                style={styles.controlLabel}
+              >
+                END
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.controlItem}
-              activeOpacity={0.85}
             >
               <Ionicons
                 name="stats-chart-outline"
                 size={18}
                 color="#DCE4F2"
               />
-
-              <Text style={styles.controlLabel}>SIGNAL</Text>
+              <Text
+                style={styles.controlLabel}
+              >
+                SIGNAL
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.controlItem}
-              activeOpacity={0.85}
             >
               <Feather
                 name="more-horizontal"
                 size={18}
                 color="#DCE4F2"
               />
-
-              <Text style={styles.controlLabel}>MORE</Text>
+              <Text
+                style={styles.controlLabel}
+              >
+                MORE
+              </Text>
             </TouchableOpacity>
           </View>
         </ImageBackground>
       </View>
     </SafeAreaView>
   );
+ 
 }
-
-const styles = StyleSheet.create({
+ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#E7EDF6',
