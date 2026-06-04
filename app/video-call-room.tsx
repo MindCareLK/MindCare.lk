@@ -144,6 +144,10 @@ export default function VideoCallRoomScreen() {
             createdBy: auth?.currentUser?.uid || 'patient_uid',
             status: 'waiting',
             createdAt: Date.now(),
+            offer: {
+              type: offer.type,
+              sdp: offer.sdp,
+            },
           });
         }
       } catch (error) {
