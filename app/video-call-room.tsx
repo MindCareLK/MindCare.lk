@@ -130,7 +130,14 @@ export default function VideoCallRoomScreen() {
 
         setLocalStream(stream);
 
+        // Add local tracks
+        stream.getTracks().forEach((track: any) => {
+          peer.addTrack(track, stream!);
+        });
+
         if (role === 'caller' && roomId && db) {
+          const offer = await peer.createOffer({});
+
           const roomRef = doc(db, 'calls', roomId);
           await setDoc(roomRef, {
             createdBy: auth?.currentUser?.uid || 'patient_uid',
