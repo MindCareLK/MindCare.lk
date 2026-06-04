@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import {
   MediaStream,
   RTCView,
@@ -148,6 +148,15 @@ export default function VideoCallRoomScreen() {
               type: offer.type,
               sdp: offer.sdp,
             },
+          });
+        } else if (role === 'callee' && roomId && db) {
+          const roomRef = doc(db, 'calls', roomId);
+          const unsubscribe = onSnapshot(roomRef, (snapshot) => {
+            const data = snapshot.data();
+            if (data?.offer && !peer.remoteDescription) {
+              console.log('Received offer', data.offer);
+              // Ready for Step 4.2
+            }
           });
         }
       } catch (error) {
