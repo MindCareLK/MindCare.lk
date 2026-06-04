@@ -1,7 +1,7 @@
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   ImageBackground,
   StyleSheet,
@@ -11,11 +11,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { doc, setDoc } from 'firebase/firestore';
 import {
   MediaStream,
   RTCView,
   mediaDevices,
+  RTCPeerConnection,
 } from 'react-native-webrtc';
+import { auth, db } from '../lib/firebase';
+import { configuration } from '../services/webrtc';
 
 type VideoCallRoomParams = {
   patient?: string | string[];
@@ -32,41 +36,41 @@ const toSingleValue = (
   typeof value === 'string'
     ? value
     : Array.isArray(value)
-    ? value[0] ?? ''
-    : '';
+      ? value[0] ?? ''
+      : '';
 
 export default function VideoCallRoomScreen() {
   const params = useLocalSearchParams<VideoCallRoomParams>();
 
-        const roomId =
-        toSingleValue(params.roomId);
+  const roomId =
+    toSingleValue(params.roomId);
 
-      const role =
-        toSingleValue(params.role);
+  const role =
+    toSingleValue(params.role);
 
-        const toggleMic = () => {
-        if (!localStream) return;
+  const toggleMic = () => {
+    if (!localStream) return;
 
-        localStream
-          .getAudioTracks()
-          .forEach((track: any) => {
-            track.enabled = !track.enabled;
-          });
+    localStream
+      .getAudioTracks()
+      .forEach((track: any) => {
+        track.enabled = !track.enabled;
+      });
 
-        setMicEnabled((prev) => !prev);
-      };
+    setMicEnabled((prev) => !prev);
+  };
 
-      const toggleCamera = () => {
-        if (!localStream) return;
+  const toggleCamera = () => {
+    if (!localStream) return;
 
-        localStream
-          .getVideoTracks()
-          .forEach((track: any) => {
-            track.enabled = !track.enabled;
-          });
+    localStream
+      .getVideoTracks()
+      .forEach((track: any) => {
+        track.enabled = !track.enabled;
+      });
 
-          setCameraEnabled((prev) => !prev);
-        };
+    setCameraEnabled((prev) => !prev);
+  };
 
   const [micEnabled, setMicEnabled] =
     useState(true);
@@ -90,6 +94,8 @@ export default function VideoCallRoomScreen() {
   const [localStream, setLocalStream] =
     useState<any>(null);
 
+  const peerRef = useRef<RTCPeerConnection | null>(null);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setSeconds((prev) => prev + 1);
@@ -112,6 +118,8 @@ export default function VideoCallRoomScreen() {
 
     const startCamera = async () => {
       try {
+        const peer = new RTCPeerConnection(configuration);
+        peerRef.current = peer;
         stream =
           await mediaDevices.getUserMedia({
             audio: true,
@@ -121,6 +129,15 @@ export default function VideoCallRoomScreen() {
           });
 
         setLocalStream(stream);
+
+        if (role === 'caller' && roomId && db) {
+          const roomRef = doc(db, 'calls', roomId);
+          await setDoc(roomRef, {
+            createdBy: auth?.currentUser?.uid || 'patient_uid',
+            status: 'waiting',
+            createdAt: Date.now(),
+          });
+        }
       } catch (error) {
         console.log(
           'Camera Error:',
@@ -130,10 +147,10 @@ export default function VideoCallRoomScreen() {
     };
 
     startCamera();
-  
+
     return () => {
       stream?.getTracks().forEach((track: any) =>
-       track.stop()
+        track.stop()
       );
     };
   }, []);
@@ -191,42 +208,42 @@ export default function VideoCallRoomScreen() {
           </View>
 
           <View
-                    style={{
-                      position: 'absolute',
-                      top: 50,
-                      left: 20,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: '#FFF',
-                        fontSize: 12,
-                      }}
-                    >
-                      Room: {roomId}
-                    </Text>
+            style={{
+              position: 'absolute',
+              top: 50,
+              left: 20,
+            }}
+          >
+            <Text
+              style={{
+                color: '#FFF',
+                fontSize: 12,
+              }}
+            >
+              Room: {roomId}
+            </Text>
 
-                    <Text
-                      style={{
-                        color: '#FFF',
-                        fontSize: 12,
-                      }}
-                    >
-                      Role: {role}
-                    </Text>
-                  </View>
+            <Text
+              style={{
+                color: '#FFF',
+                fontSize: 12,
+              }}
+            >
+              Role: {role}
+            </Text>
+          </View>
           <View style={styles.remotePreview}>
             {localStream ? (
 
-             <RTCView
-              streamURL={localStream.toURL()}
-              style={{
-                width: 88,
-                height: 128,
-              }}
-              mirror={true}
-              objectFit="cover"
-            />
+              <RTCView
+                streamURL={localStream.toURL()}
+                style={{
+                  width: 88,
+                  height: 128,
+                }}
+                mirror={true}
+                objectFit="cover"
+              />
             ) : (
               <View
                 style={
@@ -286,7 +303,7 @@ export default function VideoCallRoomScreen() {
                 name={cameraEnabled ? 'video' : 'video-off'}
                 size={18}
                 color="#DCE4F2"
-               onPress={toggleCamera}
+                onPress={toggleCamera}
               />
               <Text
                 style={styles.controlLabel}
@@ -349,9 +366,9 @@ export default function VideoCallRoomScreen() {
       </View>
     </SafeAreaView>
   );
- 
+
 }
- const styles = StyleSheet.create({
+const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#E7EDF6',
