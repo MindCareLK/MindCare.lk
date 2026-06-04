@@ -137,6 +137,7 @@ export default function VideoCallRoomScreen() {
 
         if (role === 'caller' && roomId && db) {
           const offer = await peer.createOffer({});
+          await peer.setLocalDescription(offer);
 
           const roomRef = doc(db, 'calls', roomId);
           await setDoc(roomRef, {
