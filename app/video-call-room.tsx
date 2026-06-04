@@ -3,6 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState, useRef } from 'react';
 import {
+  Image,
   ImageBackground,
   StyleSheet,
   Text,
@@ -11,13 +12,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { doc, setDoc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, updateDoc, collection, addDoc } from 'firebase/firestore';
 import {
   MediaStream,
   RTCView,
   mediaDevices,
   RTCPeerConnection,
   RTCSessionDescription,
+  RTCIceCandidate,
 } from 'react-native-webrtc';
 import { auth, db } from '../lib/firebase';
 import { configuration } from '../services/webrtc';
@@ -94,6 +96,8 @@ export default function VideoCallRoomScreen() {
 
   const [localStream, setLocalStream] =
     useState<any>(null);
+  const [remoteStream, setRemoteStream] =
+    useState<any>(null);
 
   const peerRef = useRef<RTCPeerConnection | null>(null);
 
@@ -121,6 +125,13 @@ export default function VideoCallRoomScreen() {
       try {
         const peer = new RTCPeerConnection(configuration);
         peerRef.current = peer;
+
+        (peer as any).ontrack = (event: any) => {
+          if (event.streams && event.streams[0]) {
+            setRemoteStream(event.streams[0]);
+          }
+        };
+
         stream =
           await mediaDevices.getUserMedia({
             audio: true,
@@ -137,10 +148,18 @@ export default function VideoCallRoomScreen() {
         });
 
         if (role === 'caller' && roomId && db) {
+          const roomRef = doc(db, 'calls', roomId);
+          const callerCandidatesCollection = collection(roomRef, 'offerCandidates');
+
+          (peer as any).onicecandidate = (event: any) => {
+            if (event.candidate) {
+              addDoc(callerCandidatesCollection, event.candidate.toJSON());
+            }
+          };
+
           const offer = await peer.createOffer({});
           await peer.setLocalDescription(offer);
 
-          const roomRef = doc(db, 'calls', roomId);
           await setDoc(roomRef, {
             createdBy: auth?.currentUser?.uid || 'patient_uid',
             status: 'waiting',
@@ -158,8 +177,35 @@ export default function VideoCallRoomScreen() {
               await peer.setRemoteDescription(rtcSessionDescription);
             }
           });
+
+          const calleeCandidatesCollection = collection(roomRef, 'answerCandidates');
+          const unsubCalleeCandidates = onSnapshot(calleeCandidatesCollection, (snapshot) => {
+            snapshot.docChanges().forEach((change) => {
+              if (change.type === 'added') {
+                const candidate = new RTCIceCandidate(change.doc.data());
+                peer?.addIceCandidate(candidate);
+              }
+            });
+          });
         } else if (role === 'callee' && roomId && db) {
           const roomRef = doc(db, 'calls', roomId);
+          
+          const calleeCandidatesCollection = collection(roomRef, 'answerCandidates');
+          (peer as any).onicecandidate = (event: any) => {
+            if (event.candidate) {
+              addDoc(calleeCandidatesCollection, event.candidate.toJSON());
+            }
+          };
+          const callerCandidatesCollection = collection(roomRef, 'offerCandidates');
+          const unsubCallerCandidates = onSnapshot(callerCandidatesCollection, (snapshot) => {
+            snapshot.docChanges().forEach((change) => {
+              if (change.type === 'added') {
+                const candidate = new RTCIceCandidate(change.doc.data());
+                peer?.addIceCandidate(candidate);
+              }
+            });
+          });
+
           const unsubscribe = onSnapshot(roomRef, async (snapshot) => {
             const data = snapshot.data();
             if (data?.offer && !peer.remoteDescription) {
@@ -219,15 +265,21 @@ export default function VideoCallRoomScreen() {
           Video Call Room
         </Text>
 
-        <ImageBackground
-          source={{
-            uri: 'https://images.unsplash.com/photo-1582750433449-648ed127bb54?auto=format&fit=crop&w=1200&q=80',
-          }}
-          style={styles.callStage}
-          imageStyle={
-            styles.callBackgroundImage
-          }
-        >
+        <View style={styles.callStage}>
+          {remoteStream ? (
+            <RTCView
+              streamURL={remoteStream.toURL()}
+              style={[StyleSheet.absoluteFill, styles.callBackgroundImage]}
+              objectFit="cover"
+            />
+          ) : (
+            <Image
+              source={{
+                uri: 'https://images.unsplash.com/photo-1582750433449-648ed127bb54?auto=format&fit=crop&w=1200&q=80',
+              }}
+              style={[StyleSheet.absoluteFill, styles.callBackgroundImage]}
+            />
+          )}
           <View style={styles.overlay} />
 
           <View style={styles.topInfoBar}>
@@ -401,7 +453,7 @@ export default function VideoCallRoomScreen() {
               </Text>
             </TouchableOpacity>
           </View>
-        </ImageBackground>
+        </View>
       </View>
     </SafeAreaView>
   );
