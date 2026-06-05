@@ -12,17 +12,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { doc, setDoc, onSnapshot, updateDoc, collection, addDoc } from 'firebase/firestore';
-import {
-  MediaStream,
-  RTCView,
-  mediaDevices,
-  RTCPeerConnection,
-  RTCSessionDescription,
-  RTCIceCandidate,
-} from 'react-native-webrtc';
-import { auth, db } from '../lib/firebase';
-import { configuration } from '../services/webrtc';
+import { RTCView } from 'react-native-webrtc';
+import { useCall } from '../context/CallContext';
 
 type VideoCallRoomParams = {
   patient?: string | string[];
@@ -51,59 +42,27 @@ export default function VideoCallRoomScreen() {
   const role =
     toSingleValue(params.role);
 
-  const toggleMic = () => {
-    if (!localStream) return;
+  const {
+    localStream,
+    remoteStream,
+    micEnabled,
+    cameraEnabled,
+    createCall,
+    joinCall,
+    toggleMic,
+    toggleCamera,
+    endCall,
+  } = useCall();
 
-    localStream
-      .getAudioTracks()
-      .forEach((track: any) => {
-        track.enabled = !track.enabled;
-      });
+  const [seconds, setSeconds] = useState(0);
 
-    setMicEnabled((prev) => !prev);
-  };
-
-  const toggleCamera = () => {
-    if (!localStream) return;
-
-    localStream
-      .getVideoTracks()
-      .forEach((track: any) => {
-        track.enabled = !track.enabled;
-      });
-
-    setCameraEnabled((prev) => !prev);
-  };
-
-  const [micEnabled, setMicEnabled] =
-    useState(true);
-
-  const [cameraEnabled, setCameraEnabled] =
-    useState(true);
-
-  const [seconds, setSeconds] =
-    useState(0);
-
-  const patientName =
-    toSingleValue(params.patient) || 'Patient';
-
-  const counselorName =
-    toSingleValue(params.name) || 'Counselor';
-
-  const specialty =
-    toSingleValue(params.specialty) ||
-    'General Counseling';
-
-  const [localStream, setLocalStream] =
-    useState<any>(null);
-  const [remoteStream, setRemoteStream] =
-    useState<any>(null);
-
-  const peerRef = useRef<RTCPeerConnection | null>(null);
+  const patientName = toSingleValue(params.patient) || 'Patient';
+  const counselorName = toSingleValue(params.name) || 'Counselor';
+  const specialty = toSingleValue(params.specialty) || 'General Counseling';
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setSeconds((prev) => prev + 1);
+      setSeconds((prev: number) => prev + 1);
     }, 1000);
 
     return () => clearInterval(timer);
@@ -119,135 +78,21 @@ export default function VideoCallRoomScreen() {
       .padStart(2, '0');
 
   useEffect(() => {
-    let stream: MediaStream | null = null;
-
-    const startCamera = async () => {
-      try {
-        const peer = new RTCPeerConnection(configuration);
-        peerRef.current = peer;
-
-        (peer as any).ontrack = (event: any) => {
-          if (event.streams && event.streams[0]) {
-            setRemoteStream(event.streams[0]);
-          }
-        };
-
-        stream =
-          await mediaDevices.getUserMedia({
-            audio: true,
-            video: true,
-            // video: {
-            //   facingMode: 'user',
-          });
-
-        setLocalStream(stream);
-
-        // Add local tracks
-        stream.getTracks().forEach((track: any) => {
-          peer.addTrack(track, stream!);
-        });
-
-        if (role === 'caller' && roomId && db) {
-          const roomRef = doc(db, 'calls', roomId);
-          const callerCandidatesCollection = collection(roomRef, 'offerCandidates');
-
-          (peer as any).onicecandidate = (event: any) => {
-            if (event.candidate) {
-              addDoc(callerCandidatesCollection, event.candidate.toJSON());
-            }
-          };
-
-          const offer = await peer.createOffer({});
-          await peer.setLocalDescription(offer);
-
-          await setDoc(roomRef, {
-            createdBy: auth?.currentUser?.uid || 'patient_uid',
-            status: 'waiting',
-            createdAt: Date.now(),
-            offer: {
-              type: offer.type,
-              sdp: offer.sdp,
-            },
-          });
-
-          const unsubscribe = onSnapshot(roomRef, async (snapshot) => {
-            const data = snapshot.data();
-            if (data?.answer && !peer.remoteDescription) {
-              const rtcSessionDescription = new RTCSessionDescription(data.answer);
-              await peer.setRemoteDescription(rtcSessionDescription);
-            }
-          });
-
-          const calleeCandidatesCollection = collection(roomRef, 'answerCandidates');
-          const unsubCalleeCandidates = onSnapshot(calleeCandidatesCollection, (snapshot) => {
-            snapshot.docChanges().forEach((change) => {
-              if (change.type === 'added') {
-                const candidate = new RTCIceCandidate(change.doc.data());
-                peer?.addIceCandidate(candidate);
-              }
-            });
-          });
-        } else if (role === 'callee' && roomId && db) {
-          const roomRef = doc(db, 'calls', roomId);
-          
-          const calleeCandidatesCollection = collection(roomRef, 'answerCandidates');
-          (peer as any).onicecandidate = (event: any) => {
-            if (event.candidate) {
-              addDoc(calleeCandidatesCollection, event.candidate.toJSON());
-            }
-          };
-          const callerCandidatesCollection = collection(roomRef, 'offerCandidates');
-          const unsubCallerCandidates = onSnapshot(callerCandidatesCollection, (snapshot) => {
-            snapshot.docChanges().forEach((change) => {
-              if (change.type === 'added') {
-                const candidate = new RTCIceCandidate(change.doc.data());
-                peer?.addIceCandidate(candidate);
-              }
-            });
-          });
-
-          const unsubscribe = onSnapshot(roomRef, async (snapshot) => {
-            const data = snapshot.data();
-            if (data?.offer && !peer.remoteDescription) {
-              const rtcSessionDescription = new RTCSessionDescription(data.offer);
-              await peer.setRemoteDescription(rtcSessionDescription);
-              const answer = await peer.createAnswer();
-              await peer.setLocalDescription(answer);
-
-              await updateDoc(roomRef, {
-                answer: {
-                  type: answer.type,
-                  sdp: answer.sdp,
-                },
-              });
-            }
-          });
-        }
-      } catch (error) {
-        console.log(
-          'Camera Error:',
-          error
-        );
+    if (roomId && role) {
+      if (role === 'caller') {
+        createCall(roomId as string);
+      } else if (role === 'callee') {
+        joinCall(roomId as string);
       }
-    };
-
-    startCamera();
-
-    return () => {
-      stream?.getTracks().forEach((track: any) =>
-        track.stop()
-      );
-    };
-  }, []);
+    }
+  }, [roomId, role]);
 
   const handleEndCall = () => {
     void Haptics.notificationAsync(
       Haptics.NotificationFeedbackType.Warning
     );
 
-    localStream?.getTracks().forEach((track: any) =>
-      track.stop()
-    );
+    endCall();
 
     router.replace({
       pathname: '/(counselor-tabs)/overview',
@@ -375,9 +220,7 @@ export default function VideoCallRoomScreen() {
                 size={18}
                 color="#DCE4F2"
 
-                onPress={() =>
-                  setMicEnabled(!micEnabled)
-                }
+                onPress={toggleMic}
               />
               <Text
                 style={styles.controlLabel}

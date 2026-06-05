@@ -8,6 +8,7 @@ import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
 
 import { AuthProvider } from "@/components/AuthContext";
+import { CallProvider } from "@/context/CallContext";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import * as SplashScreen from "expo-splash-screen"; 
 import { useEffect } from "react";
@@ -24,8 +25,9 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <AuthProvider>
-        <Stack>
-          <Stack.Screen name="splash" options={{ headerShown: false }} />
+        <CallProvider>
+          <Stack>
+            <Stack.Screen name="splash" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="(main-tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="(counselor-tabs)" options={{ headerShown: false }} />
@@ -57,7 +59,8 @@ export default function RootLayout() {
           name="modal"
           options={{ presentation: "modal", title: "Modal" }}
         />
-      </Stack>
+          </Stack>
+        </CallProvider>
       </AuthProvider>
       <StatusBar
         style="dark"
