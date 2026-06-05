@@ -25,8 +25,10 @@ service cloud.firestore {
     match /appointments/{appointmentId} {
       // Patients must be authenticated to book an appointment
       allow create: if request.auth != null;
-      // Only participants (patient or counselor) can read, update or delete the appointment
-      allow read, update, delete: if isParticipant(resource.data);
+      // Only patients or counselors can list their own appointments
+      allow list: if request.auth != null && (request.auth.uid == resource.data.patientId || request.auth.uid == resource.data.counselorUid);
+      // Only participants can read, update or delete the exact appointment
+      allow get, update, delete: if isParticipant(resource.data);
     }
 
     // WebRTC Calls Security
