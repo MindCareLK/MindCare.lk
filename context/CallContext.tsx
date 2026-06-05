@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useRef } from 'react';
-import { doc, setDoc, onSnapshot, updateDoc, collection, addDoc } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, updateDoc, collection, addDoc, getDocs, deleteDoc } from 'firebase/firestore';
 import {
   MediaStream,
   RTCPeerConnection,
@@ -31,6 +31,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [cameraEnabled, setCameraEnabled] = useState(true);
 
   const peerRef = useRef<RTCPeerConnection | null>(null);
+  const currentRoomIdRef = useRef<string | null>(null);
 
   const setupMedia = async () => {
     const stream = await mediaDevices.getUserMedia({
@@ -41,13 +42,16 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     return stream;
   };
 
-  const setupPeerConnection = (stream: MediaStream) => {
+  const setupPeerConnection = (stream: MediaStream, roomId?: string) => {
     const peer = new RTCPeerConnection(configuration);
     peerRef.current = peer;
 
     (peer as any).ontrack = (event: any) => {
       if (event.streams && event.streams[0]) {
         setRemoteStream(event.streams[0]);
+        if (roomId && db) {
+          updateDoc(doc(db, 'calls', roomId), { status: 'connected' }).catch(console.error);
+        }
       }
     };
 
@@ -61,8 +65,9 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const createCall = async (roomId: string) => {
     try {
       if (!db) return;
+      currentRoomIdRef.current = roomId;
       const stream = await setupMedia();
-      const peer = setupPeerConnection(stream);
+      const peer = setupPeerConnection(stream, roomId);
       
       const roomRef = doc(db, 'calls', roomId);
       const callerCandidatesCollection = collection(roomRef, 'offerCandidates');
@@ -111,10 +116,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const joinCall = async (roomId: string) => {
     try {
       if (!db) return;
+      currentRoomIdRef.current = roomId;
       const stream = await setupMedia();
-      const peer = setupPeerConnection(stream);
+      const peer = setupPeerConnection(stream, roomId);
 
       const roomRef = doc(db, 'calls', roomId);
+      
+      await updateDoc(roomRef, { status: 'ringing' });
+
       const calleeCandidatesCollection = collection(roomRef, 'answerCandidates');
       
       (peer as any).onicecandidate = (event: any) => {
@@ -179,6 +188,29 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     setRemoteStream(null);
     setMicEnabled(true);
     setCameraEnabled(true);
+
+    const roomId = currentRoomIdRef.current;
+    if (roomId && db) {
+      const roomRef = doc(db, 'calls', roomId);
+      updateDoc(roomRef, { status: 'ended' }).catch(console.error);
+
+      const cleanupCandidates = async () => {
+        try {
+          const offerCollection = collection(roomRef, 'offerCandidates');
+          const offerDocs = await getDocs(offerCollection);
+          offerDocs.forEach((d) => deleteDoc(d.ref));
+
+          const answerCollection = collection(roomRef, 'answerCandidates');
+          const answerDocs = await getDocs(answerCollection);
+          answerDocs.forEach((d) => deleteDoc(d.ref));
+        } catch (err) {
+          console.error('Error cleaning up candidates:', err);
+        }
+      };
+
+      cleanupCandidates();
+    }
+    currentRoomIdRef.current = null;
   };
 
   return (

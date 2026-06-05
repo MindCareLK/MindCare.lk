@@ -80,7 +80,7 @@ export function useCounselorSessions(counselorName: string) {
   const [sessions, setSessions] = useState<BookedSession[]>([]);
 
   useEffect(() => {
-    if (!counselorName || !db) {
+    if (!counselorName || !db || !auth?.currentUser) {
       setSessions([]);
       return;
     }
@@ -115,7 +115,7 @@ export function useCounselorSessions(counselorName: string) {
     );
 
     return () => unsubscribe();
-  }, [counselorName]);
+  }, [counselorName, auth?.currentUser?.uid]);
 
   return sessions;
 }
