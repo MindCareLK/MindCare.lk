@@ -1,4 +1,4 @@
-import { collection, addDoc, updateDoc, doc, deleteDoc, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, deleteDoc, query, where, onSnapshot, getDocs } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 
 import { useAuthContext } from '@/components/AuthContext';
@@ -87,7 +87,7 @@ export function useCounselorSessions(counselorName: string) {
 
     const q = query(
       collection(db, 'appointments'),
-      where('counselorId', '==', counselorName)
+      where('counselorUid', '==', auth?.currentUser?.uid)
     );
 
     const unsubscribe = onSnapshot(
@@ -128,9 +128,17 @@ export async function addBookedSession(session: Omit<BookedSession, 'id'> | Book
   }
 
   try {
+    let counselorUid = '';
+    const counselorQ = query(collection(db, 'counselors'), where('displayName', '==', session.doctor));
+    const counselorSnap = await getDocs(counselorQ);
+    if (!counselorSnap.empty) {
+      counselorUid = counselorSnap.docs[0].id;
+    }
+
     await addDoc(collection(db, 'appointments'), {
       patientId: user.uid,
       counselorId: session.doctor,
+      counselorUid: counselorUid,
       date: session.date,
       time: session.time,
       status: session.status === 'Upcoming' ? 'scheduled' : 'completed',

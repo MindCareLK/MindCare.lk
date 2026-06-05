@@ -12,7 +12,8 @@ service cloud.firestore {
     // we must dynamically lookup the logged-in counselor's profile to match their displayName.
     function isCounselor(appointmentData) {
       let isCounselorDoc = exists(/databases/$(database)/documents/counselors/$(request.auth.uid));
-      return isCounselorDoc && get(/databases/$(database)/documents/counselors/$(request.auth.uid)).data.displayName == appointmentData.counselorId;
+      let matchesName = isCounselorDoc && get(/databases/$(database)/documents/counselors/$(request.auth.uid)).data.displayName == appointmentData.counselorId;
+      return request.auth.uid == appointmentData.counselorUid || matchesName;
     }
 
     // Helper function to check if user is either the patient or the counselor

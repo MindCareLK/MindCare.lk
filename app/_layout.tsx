@@ -33,7 +33,6 @@ export default function RootLayout() {
           <Stack.Screen name="(counselor-tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="member-login" options={{ headerShown: false }} />
           <Stack.Screen name="counselor-login" options={{ headerShown: false }} />
-        <Stack.Screen name="articles" options={{ headerShown: false }} />
         <Stack.Screen name="article_detail" options={{ headerShown: false }} />
         <Stack.Screen
           name="counselor-register"
