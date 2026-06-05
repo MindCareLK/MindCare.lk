@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/components/AuthContext';
 import { addCounselorNotification } from '@/components/notification-store';
 import { RescheduleModal, type RescheduleSession } from '@/components/RescheduleModal';
-import { removeBookedSession, updateBookedSession, useBookedSessions } from '@/components/session-store';
+import { isSessionNear, removeBookedSession, updateBookedSession, useBookedSessions } from '@/components/session-store';
 import { getMemberProfile } from '@/lib/members';
 
 type ProfileForm = {
@@ -151,6 +151,14 @@ export default function ProfilePage() {
   const bookedSessions = useBookedSessions();
   const [isInfoFilled, setIsInfoFilled] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const upcomingCount = bookedSessions.filter((session) => session.status === 'Upcoming').length;
 
@@ -445,9 +453,18 @@ export default function ProfilePage() {
 
                     {session.actions ? (
                       <View style={styles.sessionActions}>
-                        <TouchableOpacity style={styles.joinButton} activeOpacity={0.9}>
-                          <Text style={styles.joinButtonText}>Join Session</Text>
-                        </TouchableOpacity>
+                        {isSessionNear(session.date, session.time) ? (
+                          <TouchableOpacity 
+                            style={styles.joinButton} 
+                            activeOpacity={0.9}
+                            onPress={() => router.push({
+                              pathname: '/video-call-room',
+                              params: { roomId: session.id, role: 'patient' }
+                            })}
+                          >
+                            <Text style={styles.joinButtonText}>Join Call</Text>
+                          </TouchableOpacity>
+                        ) : null}
                         <TouchableOpacity
                           style={styles.rescheduleButton}
                           activeOpacity={0.9}
