@@ -48,11 +48,6 @@ export default function MainTabsLayout() {
       <Tabs.Screen name="ai-chat" options={{ title: 'Chat' }} />
       <Tabs.Screen name="counselors" options={{ title: 'Counselors' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
-      <Tabs.Screen name="articles" options={{ href: null }} />
-      <Tabs.Screen name="articles_BACKUP_510" options={{ href: null }} />
-      <Tabs.Screen name="articles_BASE_510" options={{ href: null }} />
-      <Tabs.Screen name="articles_LOCAL_510" options={{ href: null }} />
-      <Tabs.Screen name="articles_REMOTE_510" options={{ href: null }} />
     </Tabs>
   );
 }
