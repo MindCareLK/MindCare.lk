@@ -10,3 +10,10 @@ export const getArticles = async () => {
 
   return response.data.items; 
 };
+
+export const getArticleById = async (postId) => {
+  const response = await axios.get(
+    `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts/${postId}?key=${API_KEY}`
+  );
+  return response.data; 
+};
