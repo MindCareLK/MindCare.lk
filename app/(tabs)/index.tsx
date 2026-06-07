@@ -1,9 +1,8 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type JoinCard = {
   id: 'member' | 'counselor';
@@ -47,7 +46,7 @@ export default function RoleSelectionScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="light" backgroundColor="#2F88E8" translucent={false} />
+      <StatusBar barStyle="light-content" backgroundColor="#2F88E8" translucent={false} />
       <View style={styles.container}>
         <View pointerEvents="none" style={styles.topGlow} />
         <View pointerEvents="none" style={styles.bottomGlow} />

@@ -1,5 +1,5 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { StatusBar } from "expo-status-bar";
+import { StatusBar } from "react-native";
 import React, { useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -340,7 +340,7 @@ export default function AiChatPage() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" backgroundColor="#F2F5F8" translucent={false} />
+      <StatusBar barStyle="dark-content" backgroundColor="#F2F5F8" translucent={false} />
       <View style={styles.container}>
         <View style={styles.headerRow}>
           <View>

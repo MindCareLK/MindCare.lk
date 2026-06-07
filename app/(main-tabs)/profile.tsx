@@ -1,8 +1,7 @@
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StatusBar, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/components/AuthContext';
 import { addCounselorNotification } from '@/components/notification-store';
@@ -327,7 +326,7 @@ export default function ProfilePage() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="light" backgroundColor="#2F88E8" translucent={false} />
+      <StatusBar barStyle="light-content" backgroundColor="#2F88E8" translucent={false} />
       <View style={styles.container}>
         <ScrollView
           ref={scrollViewRef}
