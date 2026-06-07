@@ -6,7 +6,7 @@ import {
   RTCSessionDescription,
   RTCIceCandidate,
   mediaDevices,
-} from 'react-native-webrtc';
+} from '../services/webrtc-shim';
 import { auth, db } from '../lib/firebase';
 import { configuration } from '../services/webrtc';
 

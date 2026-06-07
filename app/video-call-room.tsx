@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { RTCView } from 'react-native-webrtc';
+import { RTCView } from '../services/webrtc-shim';
 import { useCall } from '../context/CallContext';
 
 type VideoCallRoomParams = {

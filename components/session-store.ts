@@ -129,12 +129,15 @@ export async function addBookedSession(session: Omit<BookedSession, 'id'> | Book
 
   try {
     let counselorUid = '';
+    console.log('[addBookedSession] Querying counselor profile for doctor:', session.doctor);
     const counselorQ = query(collection(db, 'counselors'), where('displayName', '==', session.doctor));
     const counselorSnap = await getDocs(counselorQ);
     if (!counselorSnap.empty) {
       counselorUid = counselorSnap.docs[0].id;
     }
+    console.log('[addBookedSession] Resolved counselorUid:', counselorUid);
 
+    console.log('[addBookedSession] Creating appointment document for patient:', user.uid);
     await addDoc(collection(db, 'appointments'), {
       patientId: user.uid,
       counselorId: session.doctor,
@@ -143,6 +146,7 @@ export async function addBookedSession(session: Omit<BookedSession, 'id'> | Book
       time: session.time,
       status: session.status === 'Upcoming' ? 'scheduled' : 'completed',
     });
+    console.log('[addBookedSession] Appointment document created successfully.');
   } catch (error) {
     console.error('Error adding appointment:', error);
   }
