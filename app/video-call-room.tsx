@@ -1,112 +1,318 @@
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { ImageBackground, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState, useRef } from 'react';
+import {
+  Image,
+  ImageBackground,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { RTCView } from 'react-native-webrtc';
+import { useCall } from '../context/CallContext';
 
 type VideoCallRoomParams = {
   patient?: string | string[];
   name?: string | string[];
   specialty?: string | string[];
+
+  roomId?: string | string[];
+  role?: string | string[];
 };
 
-const toSingleValue = (value: string | string[] | undefined): string =>
-  typeof value === 'string' ? value : Array.isArray(value) ? value[0] ?? '' : '';
+const toSingleValue = (
+  value: string | string[] | undefined
+): string =>
+  typeof value === 'string'
+    ? value
+    : Array.isArray(value)
+      ? value[0] ?? ''
+      : '';
 
 export default function VideoCallRoomScreen() {
   const params = useLocalSearchParams<VideoCallRoomParams>();
-  const patientName = toSingleValue(params.patient) || 'Deepika Gunawardana';
+
+  const roomId =
+    toSingleValue(params.roomId);
+
+  const role =
+    toSingleValue(params.role);
+
+  const {
+    localStream,
+    remoteStream,
+    micEnabled,
+    cameraEnabled,
+    createCall,
+    joinCall,
+    toggleMic,
+    toggleCamera,
+    endCall,
+  } = useCall();
+
+  const [seconds, setSeconds] = useState(0);
+
+  const patientName = toSingleValue(params.patient) || 'Patient';
   const counselorName = toSingleValue(params.name) || 'Counselor';
   const specialty = toSingleValue(params.specialty) || 'General Counseling';
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSeconds((prev: number) => prev + 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const formattedTime =
+    Math.floor(seconds / 60)
+      .toString()
+      .padStart(2, '0') +
+    ':' +
+    (seconds % 60)
+      .toString()
+      .padStart(2, '0');
+
+  useEffect(() => {
+    if (roomId && role) {
+      if (role === 'caller') {
+        createCall(roomId as string);
+      } else if (role === 'callee') {
+        joinCall(roomId as string);
+      }
+    }
+  }, [roomId, role]);
+
   const handleEndCall = () => {
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    void Haptics.notificationAsync(
+      Haptics.NotificationFeedbackType.Warning
+    );
+
+    endCall();
+
     router.replace({
       pathname: '/(counselor-tabs)/overview',
-      params: { name: counselorName, specialty },
+      params: {
+        name: counselorName,
+        specialty,
+      },
     });
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.screen}>
-        <Text style={styles.pageLabel}>Video Call Room</Text>
+        <Text style={styles.pageLabel}>
+          Video Call Room
+        </Text>
 
-        <ImageBackground
-          source={{
-            uri: 'https://images.unsplash.com/photo-1582750433449-648ed127bb54?auto=format&fit=crop&w=1200&q=80',
-          }}
-          style={styles.callStage}
-          imageStyle={styles.callBackgroundImage}>
+        <View style={styles.callStage}>
+          {remoteStream ? (
+            <RTCView
+              streamURL={remoteStream.toURL()}
+              style={[StyleSheet.absoluteFill, styles.callBackgroundImage]}
+              objectFit="cover"
+            />
+          ) : (
+            <Image
+              source={{
+                uri: 'https://images.unsplash.com/photo-1582750433449-648ed127bb54?auto=format&fit=crop&w=1200&q=80',
+              }}
+              style={[StyleSheet.absoluteFill, styles.callBackgroundImage]}
+            />
+          )}
           <View style={styles.overlay} />
 
           <View style={styles.topInfoBar}>
             <View style={styles.topLeft}>
               <View style={styles.greenDot} />
-              <Text style={styles.topName}>{patientName}</Text>
+              <Text style={styles.topName}>
+                {patientName}
+              </Text>
             </View>
+
             <View style={styles.topRight}>
               <View style={styles.redDot} />
-              <Text style={styles.timerText}>04:22</Text>
+              <Text style={styles.timerText}>
+                {formattedTime}
+              </Text>
             </View>
           </View>
 
-          <View style={styles.remotePreview}>
-            <ImageBackground
-              source={{
-                uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=600&q=80',
+          <View
+            style={{
+              position: 'absolute',
+              top: 50,
+              left: 20,
+            }}
+          >
+            <Text
+              style={{
+                color: '#FFF',
+                fontSize: 12,
               }}
-              style={styles.remotePreviewImage}
-              imageStyle={styles.remotePreviewImageStyle}
-            />
+            >
+              Room: {roomId}
+            </Text>
+
+            <Text
+              style={{
+                color: '#FFF',
+                fontSize: 12,
+              }}
+            >
+              Role: {role}
+            </Text>
+          </View>
+          <View style={styles.remotePreview}>
+            {localStream ? (
+
+              <RTCView
+                streamURL={localStream.toURL()}
+                style={{
+                  width: 88,
+                  height: 128,
+                }}
+                mirror={true}
+                objectFit="cover"
+              />
+            ) : (
+              <View
+                style={
+                  styles.loadingPreview
+                }
+              >
+                <Text
+                  style={styles.loadingText}
+                >
+                  Starting Camera...
+                </Text>
+              </View>
+            )}
           </View>
 
-          <TouchableOpacity style={styles.audioOnlyButton} activeOpacity={0.85}>
-            <Feather name="headphones" size={16} color="#FFFFFF" />
-            <Text style={styles.audioOnlyText}>Switch to Audio-Only</Text>
+          <TouchableOpacity
+            style={styles.audioOnlyButton}
+          >
+            <Feather
+              name="headphones"
+              size={16}
+              color="#FFFFFF"
+            />
+
+            <Text
+              style={styles.audioOnlyText}
+            >
+              Switch to Audio-Only
+            </Text>
           </TouchableOpacity>
 
           <View style={styles.controlDock}>
-            <TouchableOpacity style={styles.controlItem} activeOpacity={0.85}>
-              <Feather name="mic-off" size={18} color="#DCE4F2" />
-              <Text style={styles.controlLabel}>MIC</Text>
+            <TouchableOpacity
+              style={styles.controlItem}
+            >
+              <Feather
+                name={micEnabled ? 'mic' : 'mic-off'}
+                size={18}
+                color="#DCE4F2"
+
+                onPress={toggleMic}
+              />
+              <Text
+                style={styles.controlLabel}
+              >
+                MIC
+              </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.controlItem} activeOpacity={0.85}>
-              <Feather name="video-off" size={18} color="#DCE4F2" />
-              <Text style={styles.controlLabel}>VIDEO</Text>
+            <TouchableOpacity
+              style={styles.controlItem}
+              onPress={toggleMic}
+            >
+              <Feather
+                name={cameraEnabled ? 'video' : 'video-off'}
+                size={18}
+                color="#DCE4F2"
+                onPress={toggleCamera}
+              />
+              <Text
+                style={styles.controlLabel}
+              >
+                VIDEO
+              </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={[styles.controlItem, styles.endItem]} activeOpacity={0.85} onPress={handleEndCall}>
-              <MaterialCommunityIcons name="phone-hangup" size={18} color="#FFFFFF" />
-              <Text style={styles.controlLabel}>END</Text>
+            <TouchableOpacity
+              style={[
+                styles.controlItem,
+                styles.endItem,
+              ]}
+              onPress={handleEndCall}
+            >
+              <MaterialCommunityIcons
+                name="phone-hangup"
+                size={18}
+                color="#FFFFFF"
+              />
+
+              <Text
+                style={styles.controlLabel}
+              >
+                END
+              </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.controlItem} activeOpacity={0.85}>
-              <Ionicons name="stats-chart-outline" size={18} color="#DCE4F2" />
-              <Text style={styles.controlLabel}>SIGNAL</Text>
+            <TouchableOpacity
+              style={styles.controlItem}
+            >
+              <Ionicons
+                name="stats-chart-outline"
+                size={18}
+                color="#DCE4F2"
+              />
+              <Text
+                style={styles.controlLabel}
+              >
+                SIGNAL
+              </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.controlItem} activeOpacity={0.85}>
-              <Feather name="more-horizontal" size={18} color="#DCE4F2" />
-              <Text style={styles.controlLabel}>MORE</Text>
+            <TouchableOpacity
+              style={styles.controlItem}
+            >
+              <Feather
+                name="more-horizontal"
+                size={18}
+                color="#DCE4F2"
+              />
+              <Text
+                style={styles.controlLabel}
+              >
+                MORE
+              </Text>
             </TouchableOpacity>
           </View>
-        </ImageBackground>
+        </View>
       </View>
     </SafeAreaView>
   );
-}
 
+}
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#E7EDF6',
   },
+
   screen: {
     flex: 1,
     backgroundColor: '#E7EDF6',
   },
+
   pageLabel: {
     marginTop: 2,
     marginLeft: 10,
@@ -116,6 +322,7 @@ const styles = StyleSheet.create({
     color: '#699CE8',
     fontWeight: '500',
   },
+
   callStage: {
     flex: 1,
     margin: 8,
@@ -123,13 +330,20 @@ const styles = StyleSheet.create({
     borderColor: '#2F88E8',
     overflow: 'hidden',
   },
+
   callBackgroundImage: {
     opacity: 0.72,
   },
+
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(25, 41, 63, 0.42)',
   },
+
   topInfoBar: {
     marginTop: 10,
     marginHorizontal: 16,
@@ -141,28 +355,33 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 10,
   },
+
   topLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
+
   topRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
+
   greenDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: '#2AC769',
   },
+
   redDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: '#F04444',
   },
+
   topName: {
     fontFamily: 'Inter',
     fontSize: 14,
@@ -170,6 +389,7 @@ const styles = StyleSheet.create({
     color: '#1E2736',
     fontWeight: '500',
   },
+
   timerText: {
     fontFamily: 'Inter',
     fontSize: 14,
@@ -177,6 +397,7 @@ const styles = StyleSheet.create({
     color: '#1E2736',
     fontWeight: '700',
   },
+
   remotePreview: {
     position: 'absolute',
     top: 78,
@@ -189,12 +410,22 @@ const styles = StyleSheet.create({
     borderColor: '#0D1626',
     backgroundColor: '#0D1626',
   },
-  remotePreviewImage: {
+
+  remoteRTCView: {
     flex: 1,
   },
-  remotePreviewImageStyle: {
-    borderRadius: 12,
+
+  loadingPreview: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
+
+  loadingText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+  },
+
   audioOnlyButton: {
     position: 'absolute',
     bottom: 124,
@@ -209,6 +440,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+
   audioOnlyText: {
     fontFamily: 'Inter',
     fontSize: 13,
@@ -216,6 +448,7 @@ const styles = StyleSheet.create({
     color: '#F1F6FF',
     fontWeight: '500',
   },
+
   controlDock: {
     position: 'absolute',
     left: 20,
@@ -231,17 +464,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     paddingHorizontal: 8,
   },
+
   controlItem: {
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
   },
+
   endItem: {
     width: 46,
     height: 46,
     borderRadius: 23,
     backgroundColor: '#FF2E6E',
   },
+
   controlLabel: {
     fontFamily: 'Inter',
     fontSize: 9,

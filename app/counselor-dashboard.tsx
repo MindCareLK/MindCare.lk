@@ -8,7 +8,29 @@ import { signOut } from 'firebase/auth';
 
 import { markCounselorNotificationsAsRead, useCounselorNotifications } from '@/components/notification-store';
 import { getCounselorProfile } from '@/lib/counselors';
+import { getMemberProfile } from '@/lib/members';
 import { auth } from '@/lib/firebase';
+import { useCounselorSessions } from '@/components/session-store';
+
+function PatientName({ uid }: { uid: string }) {
+  const [name, setName] = useState<string>('Loading...');
+
+  useEffect(() => {
+    if (!uid) {
+      setName('Unknown Patient');
+      return;
+    }
+    let isMounted = true;
+    getMemberProfile(uid).then(profile => {
+      if (isMounted) setName(profile?.name || profile?.displayName || 'Unknown Patient');
+    }).catch(() => {
+      if (isMounted) setName('Unknown Patient');
+    });
+    return () => { isMounted = false; };
+  }, [uid]);
+
+  return <Text style={styles.sessionName}>{name}</Text>;
+}
 
 export default function CounselorDashboardScreen() {
   const [counselorName, setCounselorName] = useState('Counselor');
@@ -18,6 +40,9 @@ export default function CounselorDashboardScreen() {
   const [isAccountMenuVisible, setIsAccountMenuVisible] = useState(false);
   const [isLogoutConfirmVisible, setIsLogoutConfirmVisible] = useState(false);
   const notifications = useCounselorNotifications();
+
+  const counselorSessions = useCounselorSessions(counselorName);
+  const upcomingSessions = counselorSessions.filter(s => s.status === 'Upcoming');
 
   useEffect(() => {
     const user = auth?.currentUser;
@@ -197,52 +222,36 @@ export default function CounselorDashboardScreen() {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.sessionCard}>
-            <Text style={styles.sessionTime}>10:30 AM</Text>
-            <View style={styles.sessionDivider} />
-            <View style={styles.sessionMain}>
-              <Text style={styles.sessionName}>Buddhini Perera</Text>
-              <Text style={styles.sessionType}>Video call</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.sessionActionButton}
-              activeOpacity={0.88}
-              onPress={() =>
-                router.push({
-                  pathname: '/call-selection',
-                  params: {
-                    name: counselorName,
-                    specialty,
-                    patient: 'Buddhini Perera',
-                  },
-                })
-              }>
-              <Text style={styles.sessionActionText}>Join Now</Text>
-            </TouchableOpacity>
-          </View>
+          {upcomingSessions.length === 0 ? (
+            <Text style={styles.footerText}>No upcoming sessions for today</Text>
+          ) : (
+            upcomingSessions.map(session => (
+              <View key={session.id} style={styles.sessionCard}>
+                <Text style={styles.sessionTime}>{session.time}</Text>
+                <View style={styles.sessionDivider} />
+                <View style={styles.sessionMain}>
+                  <PatientName uid={session.patientId || ''} />
+                  <Text style={styles.sessionType}>Video call</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.sessionActionButton}
+                  activeOpacity={0.88}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/video-call-room',
+                      params: {
+                        roomId: session.id,
+                        role: 'counselor',
+                      },
+                    })
+                  }>
+                  <Text style={styles.sessionActionText}>Join Call</Text>
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
 
-          <View style={styles.sessionCard}>
-            <Text style={styles.sessionTime}>1:30 PM</Text>
-            <View style={styles.sessionDivider} />
-            <View style={styles.sessionMain}>
-              <Text style={styles.sessionName}>Ruwani Madumali</Text>
-              <Text style={styles.sessionType}>Video call</Text>
-            </View>
-            <TouchableOpacity
-              style={[
-                styles.sessionActionButton,
-                styles.remindButton,
-                isReminderSent && styles.remindedButton,
-              ]}
-              activeOpacity={0.88}
-              onPress={handleRemindPress}>
-              <Text style={[styles.sessionActionText, styles.remindText, isReminderSent && styles.remindedText]}>
-                {isReminderSent ? 'Reminded' : 'Remind'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.footerText}>All caught up for today</Text>
+          <Text style={styles.footerText}>All caught up</Text>
           <Text style={styles.profileInfo}>
             Logged in as {counselorName} ({specialty})
           </Text>
