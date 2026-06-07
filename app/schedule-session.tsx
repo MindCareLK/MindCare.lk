@@ -1,7 +1,7 @@
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Image } from 'react-native';
+import { useMemo, useState, useEffect } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Image, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { addCounselorNotification } from '@/components/notification-store';
 import { addBookedSession } from '@/components/session-store';
@@ -80,12 +80,80 @@ export default function ScheduleSessionPage() {
     tags?: string | string[];
   }>();
 
-  const initialMonth = useMemo(() => new Date(2024, 9, 1), []);
-  const initialDate = useMemo(() => new Date(2024, 9, 25), []);
+  const initialMonth = useMemo(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  }, []);
+  const initialDate = useMemo(() => new Date(), []);
   const [visibleMonth, setVisibleMonth] = useState(initialMonth);
   const [selectedDate, setSelectedDate] = useState(formatIsoDate(initialDate));
+
+  const selectedDateObject = useMemo(() => {
+    const [year, month, day] = selectedDate.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }, [selectedDate]);
   const [selectedSlot, setSelectedSlot] = useState('10:30 AM');
   const [selectedMode, setSelectedMode] = useState<ConsultationMode>('video');
+
+  const isSlotInPast = (slotStr: string) => {
+    const now = new Date();
+    const isToday =
+      selectedDateObject.getFullYear() === now.getFullYear() &&
+      selectedDateObject.getMonth() === now.getMonth() &&
+      selectedDateObject.getDate() === now.getDate();
+
+    if (!isToday) return false;
+
+    const slotTime = (() => {
+      const result = new Date(selectedDateObject);
+      const match = slotStr.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+      if (!match) return result;
+
+      let hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      const ampm = match[3].toUpperCase();
+
+      if (ampm === 'PM' && hours < 12) {
+        hours += 12;
+      } else if (ampm === 'AM' && hours === 12) {
+        hours = 0;
+      }
+
+      result.setHours(hours, minutes, 0, 0);
+      return result;
+    })();
+
+    return slotTime < now;
+  };
+
+  useEffect(() => {
+    const now = new Date();
+    const isToday =
+      selectedDateObject.getFullYear() === now.getFullYear() &&
+      selectedDateObject.getMonth() === now.getMonth() &&
+      selectedDateObject.getDate() === now.getDate();
+
+    if (isToday) {
+      const getSlotDateTime = (slotStr: string) => {
+        const result = new Date(selectedDateObject);
+        const match = slotStr.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+        if (!match) return result;
+        let hours = parseInt(match[1], 10);
+        const minutes = parseInt(match[2], 10);
+        const ampm = match[3].toUpperCase();
+        if (ampm === 'PM' && hours < 12) hours += 12;
+        else if (ampm === 'AM' && hours === 12) hours = 0;
+        result.setHours(hours, minutes, 0, 0);
+        return result;
+      };
+
+      const isCurrentSlotPast = getSlotDateTime(selectedSlot) < now;
+      if (isCurrentSlotPast) {
+        const firstFutureSlot = SLOT_LABELS.find((slot) => getSlotDateTime(slot) >= now);
+        setSelectedSlot(firstFutureSlot || '');
+      }
+    }
+  }, [selectedDate, selectedDateObject]);
 
   const tagsParam = Array.isArray(params.tags) ? params.tags[0] : params.tags;
   const counselorTags = (tagsParam ? tagsParam.split(',') : ['Anxiety', 'CBT']).filter(Boolean).slice(0, 2);
@@ -97,10 +165,6 @@ export default function ScheduleSessionPage() {
     'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=300&q=80';
 
   const calendarDays = useMemo(() => getCalendarDays(visibleMonth), [visibleMonth]);
-  const selectedDateObject = useMemo(() => {
-    const [year, month, day] = selectedDate.split('-').map(Number);
-    return new Date(year, month - 1, day);
-  }, [selectedDate]);
 
   const canGoPreviousMonth =
     visibleMonth.getFullYear() > initialMonth.getFullYear() || visibleMonth.getMonth() > initialMonth.getMonth();
@@ -121,6 +185,39 @@ export default function ScheduleSessionPage() {
   };
 
   const handleConfirmBooking = () => {
+    if (!selectedSlot) {
+      Alert.alert('No Time Slot Selected', 'Please select an available future time slot.');
+      return;
+    }
+
+    const sessionDateTime = (() => {
+      const result = new Date(selectedDateObject);
+      const match = selectedSlot.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+      if (!match) return result;
+
+      let hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      const ampm = match[3].toUpperCase();
+
+      if (ampm === 'PM' && hours < 12) {
+        hours += 12;
+      } else if (ampm === 'AM' && hours === 12) {
+        hours = 0;
+      }
+
+      result.setHours(hours, minutes, 0, 0);
+      return result;
+    })();
+
+    const now = new Date();
+    if (sessionDateTime < now) {
+      Alert.alert(
+        'Invalid Date/Time',
+        'Bookings cannot be made for previous dates and times. Please select a future date and time.'
+      );
+      return;
+    }
+
     const summaryDate = formatSummaryDate(selectedDateObject);
 
     addBookedSession({
@@ -231,30 +328,40 @@ export default function ScheduleSessionPage() {
               <View style={styles.calendarGrid}>
                 {calendarDays.map((day) => {
                   const isSelected = day.isoDate === selectedDate;
-                  const isHighlighted = day.isoDate === '2024-10-24';
+                  const isToday = day.isoDate === formatIsoDate(new Date());
+                  const isPastDay = (() => {
+                    if (!day.isoDate) return true;
+                    const [year, month, dateVal] = day.isoDate.split('-').map(Number);
+                    const cellDate = new Date(year, month - 1, dateVal);
+                    const todayDate = new Date();
+                    todayDate.setHours(0, 0, 0, 0);
+                    return cellDate < todayDate;
+                  })();
 
                   return (
                     <TouchableOpacity
-                      key={day.key}
-                      style={[
-                        styles.dayCell,
-                        !day.isCurrentMonth && styles.dayCellEmpty,
-                        isHighlighted && styles.dayCellHighlighted,
-                        isSelected && styles.dayCellSelected,
-                      ]}
-                      activeOpacity={0.85}
-                      disabled={!day.isoDate}
-                      onPress={() => day.isoDate && handleSelectDate(day.isoDate)}>
-                      <Text
-                        style={[
-                          styles.dayText,
-                          !day.isCurrentMonth && styles.dayTextEmpty,
-                          isHighlighted && styles.dayTextHighlighted,
-                          isSelected && styles.dayTextSelected,
-                        ]}>
-                        {day.dayNumber ?? ''}
-                      </Text>
-                    </TouchableOpacity>
+                       key={day.key}
+                       style={[
+                         styles.dayCell,
+                         !day.isCurrentMonth && styles.dayCellEmpty,
+                         isPastDay && styles.dayCellMuted,
+                         isToday && styles.dayCellHighlighted,
+                         isSelected && styles.dayCellSelected,
+                       ]}
+                       activeOpacity={0.85}
+                       disabled={isPastDay || !day.isoDate}
+                       onPress={() => day.isoDate && handleSelectDate(day.isoDate)}>
+                       <Text
+                         style={[
+                           styles.dayText,
+                           !day.isCurrentMonth && styles.dayTextEmpty,
+                           isPastDay && styles.dayTextMuted,
+                           isToday && styles.dayTextHighlighted,
+                           isSelected && styles.dayTextSelected,
+                         ]}>
+                         {day.dayNumber ?? ''}
+                       </Text>
+                     </TouchableOpacity>
                   );
                 })}
               </View>
@@ -273,14 +380,24 @@ export default function ScheduleSessionPage() {
             <View style={styles.slotGrid}>
               {SLOT_LABELS.map((slot, index) => {
                 const isActive = slot === selectedSlot;
+                const isPast = isSlotInPast(slot);
 
                 return (
                   <TouchableOpacity
                     key={`${slot}-${index}`}
-                    style={[styles.slotButton, isActive && styles.slotButtonActive]}
+                    style={[
+                      styles.slotButton,
+                      isActive && styles.slotButtonActive,
+                      isPast && styles.slotButtonDisabled,
+                    ]}
                     activeOpacity={0.88}
+                    disabled={isPast}
                     onPress={() => setSelectedSlot(slot)}>
-                    <Text style={[styles.slotText, isActive && styles.slotTextActive]}>{slot}</Text>
+                    <Text style={[
+                      styles.slotText,
+                      isActive && styles.slotTextActive,
+                      isPast && styles.slotTextDisabled,
+                    ]}>{slot}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -544,12 +661,18 @@ const styles = StyleSheet.create({
   dayCellEmpty: {
     opacity: 0,
   },
+  dayCellMuted: {
+    opacity: 0.3,
+  },
+  dayTextMuted: {
+    color: '#A1A9B5',
+  },
   dayCellHighlighted: {
-    borderRadius: 18,
+    borderRadius: 999,
     backgroundColor: '#E7F0FF',
   },
   dayCellSelected: {
-    borderRadius: 18,
+    borderRadius: 999,
     backgroundColor: '#2D7BF0',
     shadowColor: '#2D7BF0',
     shadowOpacity: 0.26,
@@ -607,6 +730,13 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
     elevation: 4,
+  },
+  slotButtonDisabled: {
+    opacity: 0.35,
+    backgroundColor: '#EAECEF',
+  },
+  slotTextDisabled: {
+    color: '#9CA3AF',
   },
   slotText: {
     fontFamily: 'Inter',

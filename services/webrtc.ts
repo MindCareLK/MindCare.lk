@@ -2,7 +2,7 @@
 
 import {
   RTCPeerConnection,
-} from 'react-native-webrtc';
+} from './webrtc-shim';
 
 export const configuration = {
   iceServers: [

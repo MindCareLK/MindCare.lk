@@ -281,7 +281,15 @@ export default function ProfilePage() {
 
   const handleOpenReschedule = (session: SessionCard) => {
     setRescheduleSession(session);
-    setSelectedRescheduleDate('2026-03-11');
+    
+    // Format today as YYYY-MM-DD
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+    
+    setSelectedRescheduleDate(todayStr);
     setSelectedTimeSlot('10:00 AM');
   };
 
@@ -291,6 +299,36 @@ export default function ProfilePage() {
 
   const handleConfirmReschedule = () => {
     if (!rescheduleSession) {
+      return;
+    }
+
+    const sessionDateTime = (() => {
+      const [year, month, day] = selectedRescheduleDate.split('-').map(Number);
+      const result = new Date(year, month - 1, day);
+      
+      const match = selectedTimeSlot.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+      if (!match) return result;
+
+      let hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      const ampm = match[3].toUpperCase();
+
+      if (ampm === 'PM' && hours < 12) {
+        hours += 12;
+      } else if (ampm === 'AM' && hours === 12) {
+        hours = 0;
+      }
+
+      result.setHours(hours, minutes, 0, 0);
+      return result;
+    })();
+
+    const now = new Date();
+    if (sessionDateTime < now) {
+      Alert.alert(
+        'Invalid Date/Time',
+        'Rescheduling cannot be made for previous dates and times. Please select a future date and time.'
+      );
       return;
     }
 

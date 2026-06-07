@@ -24,7 +24,7 @@ export default function RootLayout() {
           <Stack.Screen name="(counselor-tabs)" />
           <Stack.Screen name="member-login" />
           <Stack.Screen name="counselor-login" />
-          <Stack.Screen name="article_detail" />
+          <Stack.Screen name="article-detail" />
           <Stack.Screen name="counselor-register" />
           <Stack.Screen name="member-register" />
           <Stack.Screen name="member-information-form" />

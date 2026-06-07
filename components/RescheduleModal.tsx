@@ -101,9 +101,79 @@ export function RescheduleModal({
 
   const calendarDays = useMemo(() => getCalendarDays(visibleMonth), [visibleMonth]);
 
+  const canGoPreviousMonth = useMemo(() => {
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    return visibleMonth > currentMonthStart;
+  }, [visibleMonth]);
+
   const handleMonthChange = (offset: number) => {
+    if (offset < 0 && !canGoPreviousMonth) {
+      return;
+    }
     setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1));
   };
+
+  const isSelectedDateToday = useMemo(() => {
+    const now = new Date();
+    const [year, month, day] = selectedDate.split('-').map(Number);
+    return year === now.getFullYear() && (month - 1) === now.getMonth() && day === now.getDate();
+  }, [selectedDate]);
+
+  const isSlotInPast = (slotStr: string) => {
+    if (!isSelectedDateToday) return false;
+
+    const now = new Date();
+    const slotTime = (() => {
+      const [year, month, day] = selectedDate.split('-').map(Number);
+      const result = new Date(year, month - 1, day);
+      const match = slotStr.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+      if (!match) return result;
+
+      let hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      const ampm = match[3].toUpperCase();
+
+      if (ampm === 'PM' && hours < 12) {
+        hours += 12;
+      } else if (ampm === 'AM' && hours === 12) {
+        hours = 0;
+      }
+
+      result.setHours(hours, minutes, 0, 0);
+      return result;
+    })();
+
+    return slotTime < now;
+  };
+
+  useEffect(() => {
+    if (!visible) return;
+    const now = new Date();
+    if (isSelectedDateToday) {
+      const getSlotDateTime = (slotStr: string) => {
+        const [year, month, day] = selectedDate.split('-').map(Number);
+        const result = new Date(year, month - 1, day);
+        const match = slotStr.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+        if (!match) return result;
+        let hours = parseInt(match[1], 10);
+        const minutes = parseInt(match[2], 10);
+        const ampm = match[3].toUpperCase();
+        if (ampm === 'PM' && hours < 12) hours += 12;
+        else if (ampm === 'AM' && hours === 12) hours = 0;
+        result.setHours(hours, minutes, 0, 0);
+        return result;
+      };
+
+      const isCurrentSlotPast = getSlotDateTime(selectedTimeSlot) < now;
+      if (isCurrentSlotPast) {
+        const firstFutureSlot = timeSlots.find((slot) => getSlotDateTime(slot) >= now);
+        if (firstFutureSlot) {
+          onSelectTimeSlot(firstFutureSlot);
+        }
+      }
+    }
+  }, [selectedDate, isSelectedDateToday, visible]);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -140,8 +210,12 @@ export function RescheduleModal({
                 <Text style={styles.modalSectionTitle}>Select New Date</Text>
                 <View style={styles.calendarCard}>
                   <View style={styles.calendarHeader}>
-                    <TouchableOpacity style={styles.calendarChevron} activeOpacity={0.85} onPress={() => handleMonthChange(-1)}>
-                      <Feather name="chevron-left" size={16} color="#BBC4D0" />
+                    <TouchableOpacity
+                      style={[styles.calendarChevron, !canGoPreviousMonth && styles.calendarChevronDisabled]}
+                      activeOpacity={0.85}
+                      onPress={() => handleMonthChange(-1)}
+                      disabled={!canGoPreviousMonth}>
+                      <Feather name="chevron-left" size={16} color={canGoPreviousMonth ? '#BBC4D0' : '#E5EAF0'} />
                     </TouchableOpacity>
                     <Text style={styles.calendarMonth}>{formatMonthYear(visibleMonth)}</Text>
                     <TouchableOpacity style={styles.calendarChevron} activeOpacity={0.85} onPress={() => handleMonthChange(1)}>
@@ -160,17 +234,29 @@ export function RescheduleModal({
                   <View style={styles.calendarGrid}>
                     {calendarDays.map((day) => {
                       const isSelected = day.isoDate === selectedDate;
+                      const isPastDay = (() => {
+                        const [year, month, dateVal] = day.isoDate.split('-').map(Number);
+                        const cellDate = new Date(year, month - 1, dateVal);
+                        const todayDate = new Date();
+                        todayDate.setHours(0, 0, 0, 0);
+                        return cellDate < todayDate;
+                      })();
 
                       return (
                         <TouchableOpacity
                           key={day.key}
-                          style={[styles.calendarCell, isSelected && styles.calendarCellActive]}
+                          style={[
+                            styles.calendarCell,
+                            isSelected && styles.calendarCellActive,
+                            isPastDay && styles.calendarCellDisabled,
+                          ]}
                           activeOpacity={0.85}
+                          disabled={isPastDay}
                           onPress={() => onSelectDate(day.isoDate)}>
                           <Text
                             style={[
                               styles.calendarCellText,
-                              day.muted && styles.calendarCellTextMuted,
+                              (day.muted || isPastDay) && styles.calendarCellTextMuted,
                               isSelected && styles.calendarCellTextActive,
                             ]}>
                             {day.label}
@@ -185,14 +271,24 @@ export function RescheduleModal({
                 <View style={styles.slotGrid}>
                   {timeSlots.map((slot) => {
                     const isSelected = slot === selectedTimeSlot;
+                    const isPast = isSlotInPast(slot);
 
                     return (
                       <TouchableOpacity
                         key={slot}
-                        style={[styles.slotButton, isSelected && styles.slotButtonActive]}
+                        style={[
+                          styles.slotButton,
+                          isSelected && styles.slotButtonActive,
+                          isPast && styles.slotButtonDisabled,
+                        ]}
                         activeOpacity={0.9}
+                        disabled={isPast}
                         onPress={() => onSelectTimeSlot(slot)}>
-                        <Text style={[styles.slotButtonText, isSelected && styles.slotButtonTextActive]}>{slot}</Text>
+                        <Text style={[
+                          styles.slotButtonText,
+                          isSelected && styles.slotButtonTextActive,
+                          isPast && styles.slotTextDisabled,
+                        ]}>{slot}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -386,6 +482,12 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     backgroundColor: 'rgba(47, 136, 232, 0.18)',
   },
+  calendarCellDisabled: {
+    opacity: 0.3,
+  },
+  calendarChevronDisabled: {
+    opacity: 0.35,
+  },
   calendarCellText: {
     fontFamily: 'Inter',
     fontSize: 12,
@@ -420,6 +522,14 @@ const styles = StyleSheet.create({
   slotButtonActive: {
     borderColor: '#2F88E8',
     backgroundColor: 'rgba(47, 136, 232, 0.16)',
+  },
+  slotButtonDisabled: {
+    opacity: 0.35,
+    backgroundColor: '#F3F4F6',
+    borderColor: '#E5E7EB',
+  },
+  slotTextDisabled: {
+    color: '#9CA3AF',
   },
   slotButtonText: {
     fontFamily: 'Inter',
