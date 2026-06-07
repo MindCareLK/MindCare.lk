@@ -1,6 +1,9 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
-import { getAuth, type Auth } from "firebase/auth";
+import { getAuth, initializeAuth, type Auth } from "firebase/auth";
+// @ts-expect-error - The function exists in the React Native bundle but is missing from Firebase's generic TS definitions.
+import { getReactNativePersistence } from "firebase/auth";
 import { Firestore, getFirestore } from "firebase/firestore";
+import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -17,17 +20,22 @@ const missingFirebaseKeys = Object.entries(firebaseConfig)
 
 const hasFirebaseConfig = missingFirebaseKeys.length === 0;
 
-const firebaseApp = hasFirebaseConfig
-  ? getApps().length
-    ? getApp()
-    : initializeApp(firebaseConfig)
-  : null;
-
+let firebaseApp = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
 
-if (firebaseApp) {
-  auth = getAuth(firebaseApp);
+if (hasFirebaseConfig) {
+  // Check if Firebase is already initialized to prevent errors during Expo Fast Refresh
+  if (getApps().length === 0) {
+    firebaseApp = initializeApp(firebaseConfig);
+    auth = initializeAuth(firebaseApp, {
+      persistence: getReactNativePersistence(ReactNativeAsyncStorage)
+    });
+  } else {
+    firebaseApp = getApp();
+    auth = getAuth(firebaseApp);
+  }
+  
   db = getFirestore(firebaseApp);
 }
 
