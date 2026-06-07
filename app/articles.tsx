@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { View, Text, FlatList, Image, TouchableOpacity, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getArticles } from "../../services/bloggerApi";
+import { getArticles } from "../services/bloggerApi";
 import { router } from "expo-router";
 
 type ReadCard = {

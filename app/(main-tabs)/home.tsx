@@ -311,7 +311,7 @@ export default function HomePage() {
           <TouchableOpacity
             style={styles.moreButton}
             activeOpacity={0.88}
-            onPress={() => router.push("/(main-tabs)/articles" as any)}
+            onPress={() => router.push("../articles" as any)}
           >
             <Text style={styles.moreButtonText}>Explore more articles</Text>
           </TouchableOpacity>
