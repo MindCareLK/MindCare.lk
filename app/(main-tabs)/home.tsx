@@ -163,7 +163,7 @@ export default function HomePage() {
         author: item.author?.displayName || "Admin",
         minutes: "5 min read",
         image:
-          "https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?auto=format&fit=crop&w=1200&q=80",
+          "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/ArticleBackground.png",
       }));
 
       setReads(formatted || []);
