@@ -194,7 +194,7 @@ export default function AiChatPage() {
 
   // FIXED: Standardize model path to production identifier string
   const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-  const GEMINI_MODEL = "gemini-2.5-flash";
+  const GEMINI_MODEL = "gemini-3.5-flash";
 
   // FIXED: Standardized chat configuration mapping logic
   // FIXED: Explicitly maps target variables to standard production pipelines
@@ -454,40 +454,42 @@ export default function AiChatPage() {
               </>
             )}
           </ScrollView>
-          <View style={styles.quickActions}>
-            <TouchableOpacity
-              style={styles.quickChip}
-              activeOpacity={0.85}
-              onPress={() => setInputText("මට හුස්ම ගැනීමේ උපදෙස් දෙන්න.")}
-            >
-              <Text style={styles.quickChipText}>Deep Breath</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickChip}
-              activeOpacity={0.85}
-              onPress={() =>
-                setInputText("මානසික පීඩනය අඩු කරන්න උපදෙස් ලබා දෙන්න.")
-              }
-            >
-              <Text style={styles.quickChipText}>Anxiety Tip</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickChip}
-              activeOpacity={0.85}
-              onPress={() => setInputText("මගේ මානසික අත්දැකීම ලොග් කරන්න.")}
-            >
-              <Text style={styles.quickChipText}>Log Mood</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickChip}
-              activeOpacity={0.85}
-              onPress={() =>
-                setInputText("මට සහය ලබා ගත හැකි වෛද්‍ය වෘත්තිය විස්තර කරන්න.")
-              }
-            >
-              <Text style={styles.quickChipText}>Find Help</Text>
-            </TouchableOpacity>
-          </View>
+          {isAssessmentComplete && (
+            <View style={styles.quickActions}>
+              <TouchableOpacity
+                style={styles.quickChip}
+                activeOpacity={0.85}
+                onPress={() => setInputText("මට හුස්ම ගැනීමේ උපදෙස් දෙන්න.")}
+              >
+                <Text style={styles.quickChipText}>Deep Breath</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.quickChip}
+                activeOpacity={0.85}
+                onPress={() =>
+                  setInputText("මානසික පීඩනය අඩු කරන්න උපදෙස් ලබා දෙන්න.")
+                }
+              >
+                <Text style={styles.quickChipText}>Anxiety Tip</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.quickChip}
+                activeOpacity={0.85}
+                onPress={() => setInputText("මගේ මානසික අත්දැකීම ලොග් කරන්න.")}
+              >
+                <Text style={styles.quickChipText}>Log Mood</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.quickChip}
+                activeOpacity={0.85}
+                onPress={() =>
+                  setInputText("මට සහය ලබා ගත හැකි වෛද්‍ය වෘත්තිය විස්තර කරන්න.")
+                }
+              >
+                <Text style={styles.quickChipText}>Find Help</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {isAssessmentComplete && (
             <View style={styles.inputBar}>

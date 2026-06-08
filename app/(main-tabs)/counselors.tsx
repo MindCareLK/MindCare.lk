@@ -1,15 +1,19 @@
 import { Feather, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { StatusBar } from 'react-native';
 
 import { CounselorProfile, listCounselors } from '@/lib/counselors';
+import { useAuthContext } from '@/components/AuthContext';
+import AuthRequiredModal from '@/components/AuthRequiredModal';
 
 const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=300&q=80';
 
 export default function CounselorsPage() {
+  const { userRole } = useAuthContext();
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [counselors, setCounselors] = useState<CounselorProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -64,42 +68,62 @@ export default function CounselorsPage() {
 
           {counselors.map((item) => (
             <View key={item.uid} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={styles.avatarWrap}>
-                  <Image source={{ uri: DEFAULT_AVATAR }} style={styles.avatar} />
-                  <View style={styles.onlineDot} />
-                </View>
-                <View style={styles.cardMain}>
-                  <View style={styles.nameRow}>
-                    <Text style={styles.name}>{item.displayName || item.fullName}</Text>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => {
+                  router.push({
+                    pathname: '/doctor_profile',
+                    params: {
+                      name: item.displayName || item.fullName,
+                      title: item.specialty,
+                      years: `${Math.max(item.qualifications.length, 1)} credentials`,
+                      avatar: DEFAULT_AVATAR,
+                      tags: (item.qualifications.length ? item.qualifications : [item.specialty]).slice(0, 2).join(','),
+                    },
+                  });
+                }}
+              >
+                <View style={styles.cardHeader}>
+                  <View style={styles.avatarWrap}>
+                    <Image source={{ uri: DEFAULT_AVATAR }} style={styles.avatar} />
+                    <View style={styles.onlineDot} />
                   </View>
-                  <Text style={styles.title}>{item.specialty.toUpperCase()}</Text>
-                  <View style={styles.tagsRow}>
-                    {(item.qualifications.length ? item.qualifications : ['Verified', 'Available']).slice(0, 2).map((tag) => (
-                      <Text key={tag} style={styles.tagText}>
-                        {tag}
-                      </Text>
-                    ))}
+                  <View style={styles.cardMain}>
+                    <View style={styles.nameRow}>
+                      <Text style={styles.name}>{item.displayName || item.fullName}</Text>
+                    </View>
+                    <Text style={styles.title}>{item.specialty.toUpperCase()}</Text>
+                    <View style={styles.tagsRow}>
+                      {(item.qualifications.length ? item.qualifications : ['Verified', 'Available']).slice(0, 2).map((tag) => (
+                        <Text key={tag} style={styles.tagText}>
+                          {tag}
+                        </Text>
+                      ))}
+                    </View>
                   </View>
                 </View>
-              </View>
-              <View style={{ borderBottomWidth: 1, borderBottomColor: '#ccc', marginVertical: 10, marginLeft: 60, }} />
+                <View style={{ borderBottomWidth: 1, borderBottomColor: '#ccc', marginVertical: 10, marginLeft: 60, }} />
 
-              <View style={styles.infoRow}>
-                <View style={styles.infoPill}>
-                  <MaterialCommunityIcons name="license" size={15} color="#6B7280" />
-                  <Text style={styles.infoText}>{item.qualifications.length || 1} credentials</Text>
+                <View style={styles.infoRow}>
+                  <View style={styles.infoPill}>
+                    <MaterialCommunityIcons name="license" size={15} color="#6B7280" />
+                    <Text style={styles.infoText}>{item.qualifications.length || 1} credentials</Text>
+                  </View>
+                  <View style={styles.infoPill}>
+                    <Feather name="clock" size={15} color="#6B7280" />
+                    <Text style={styles.infoText}>{item.bio ? 'Bio added' : 'Profile ready'}</Text>
+                  </View>
                 </View>
-                <View style={styles.infoPill}>
-                  <Feather name="clock" size={15} color="#6B7280" />
-                  <Text style={styles.infoText}>{item.bio ? 'Bio added' : 'Profile ready'}</Text>
-                </View>
-              </View>
+              </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.bookButton}
                 activeOpacity={0.88}
-                onPress={() =>
+                onPress={() => {
+                  if (userRole !== 'member') {
+                    setShowAuthModal(true);
+                    return;
+                  }
                   router.push({
                     pathname: '/schedule-session',
                     params: {
@@ -109,8 +133,8 @@ export default function CounselorsPage() {
                       avatar: DEFAULT_AVATAR,
                       tags: (item.qualifications.length ? item.qualifications : [item.specialty]).slice(0, 2).join(','),
                     },
-                  })
-                }>
+                  });
+                }}>
                 <Text style={styles.bookText}>Book Session</Text>
               </TouchableOpacity>
             </View>
@@ -128,6 +152,15 @@ export default function CounselorsPage() {
         </ScrollView>
 
       </View>
+
+      <AuthRequiredModal
+        visible={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onLogin={() => {
+          setShowAuthModal(false);
+          router.push('/member-login');
+        }}
+      />
     </SafeAreaView>
   );
 }

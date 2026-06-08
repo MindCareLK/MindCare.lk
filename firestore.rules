@@ -21,14 +21,27 @@ service cloud.firestore {
       return request.auth != null && (isPatient(appointmentData) || isCounselor(appointmentData));
     }
 
+    // Helper function to check if the user is an admin
+    function isAdmin() {
+      return request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Admin Profiles
+    match /admins/{adminId} {
+      // Only the admin themselves can read their own profile
+      allow read: if request.auth != null && request.auth.uid == adminId;
+      // No client-side writes — managed via Firebase Console
+      allow write: if false;
+    }
+
     // Appointments Security
     match /appointments/{appointmentId} {
       // Patients must be authenticated to book an appointment
       allow create: if request.auth != null;
-      // Only patients or counselors can list their own appointments
-      allow list: if request.auth != null && (request.auth.uid == resource.data.patientId || request.auth.uid == resource.data.counselorUid);
-      // Only participants can read, update or delete the exact appointment
-      allow get, update, delete: if isParticipant(resource.data);
+      // Only patients or counselors can list their own appointments; admins can list all
+      allow list: if request.auth != null && (request.auth.uid == resource.data.patientId || request.auth.uid == resource.data.counselorUid || isAdmin());
+      // Only participants or admins can read, update or delete the exact appointment
+      allow get, update, delete: if isParticipant(resource.data) || isAdmin();
     }
 
     // WebRTC Calls Security
@@ -49,16 +62,19 @@ service cloud.firestore {
     
     // Member Profiles
     match /members/{memberId} {
-      // Patients can only write to their own profile
+      // Patients can only write to their own profile; admins can read and delete
       allow read, write: if request.auth != null && request.auth.uid == memberId;
+      allow read, delete: if isAdmin();
     }
     
     // Counselor Profiles
     match /counselors/{counselorId} {
       // Profiles are readable by patients to browse counselors
-      allow read: if request.auth != null;
+      allow read: if true;
       // Only the specific counselor can update their own profile
       allow write: if request.auth != null && request.auth.uid == counselorId;
+      // Admins can also delete counselor profiles
+      allow delete: if isAdmin();
     }
     
     // Notifications

@@ -1,13 +1,16 @@
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { StatusBar, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StatusBar, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/components/AuthContext';
 import { addCounselorNotification } from '@/components/notification-store';
 import { RescheduleModal, type RescheduleSession } from '@/components/RescheduleModal';
 import { isSessionNear, removeBookedSession, updateBookedSession, useBookedSessions } from '@/components/session-store';
 import { getMemberProfile } from '@/lib/members';
+import { signOut } from 'firebase/auth';
+import { auth, db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 type ProfileForm = {
   name: string;
@@ -150,6 +153,7 @@ export default function ProfilePage() {
   const bookedSessions = useBookedSessions();
   const [isInfoFilled, setIsInfoFilled] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [isCounselorUser, setIsCounselorUser] = useState(false);
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -182,6 +186,7 @@ export default function ProfilePage() {
       setDraftProfile(memberProfile);
       setIsInfoFilled(Boolean(memberProfile.name || memberProfile.email || memberProfile.gender || memberProfile.dob));
       setIsLoadingProfile(false);
+      setIsCounselorUser(false);
       return;
     }
 
@@ -189,6 +194,20 @@ export default function ProfilePage() {
 
     void (async () => {
       try {
+        if (db) {
+          const docRef = doc(db, 'counselors', currentUser.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists() && isMounted) {
+            setIsCounselorUser(true);
+            setIsLoadingProfile(false);
+            return;
+          }
+        }
+        
+        if (isMounted) {
+          setIsCounselorUser(false);
+        }
+
         const savedProfile = await getMemberProfile(currentUser.uid);
         const nextProfile = savedProfile
           ? {
@@ -268,11 +287,14 @@ export default function ProfilePage() {
       {
         text: 'Logout',
         style: 'destructive',
-        onPress: () => {
-          if ('dismissAll' in router && typeof router.dismissAll === 'function') {
-            router.dismissAll();
+        onPress: async () => {
+          try {
+            if (auth) {
+              await signOut(auth);
+            }
+          } catch (e) {
+            // silent
           }
-
           router.replace('/(tabs)');
         },
       },
@@ -361,6 +383,77 @@ export default function ProfilePage() {
     setRescheduleSession(null);
   };
 
+
+  if (isLoadingProfile) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="light-content" backgroundColor="#2F88E8" translucent={false} />
+        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+          <ActivityIndicator size="large" color="#FFFFFF" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!currentUser || isCounselorUser) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="light-content" backgroundColor="#2F88E8" translucent={false} />
+        <View style={styles.container}>
+          <ScrollView
+            contentContainerStyle={[styles.content, { flexGrow: 1 }]}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.hero}>
+              <Text style={styles.heroTitleNoBack}>My Profile</Text>
+              <Text style={styles.heroSubtitle}>View and manage your personal information and appointments</Text>
+            </View>
+
+            <View style={[styles.sheetTop, { flex: 1, minHeight: 520, paddingBottom: 40 }]}>
+              {/* Lock Icon Circle */}
+              <View style={styles.authIconCircle}>
+                <Feather name="lock" size={32} color="#2F88E8" />
+              </View>
+
+              <Text style={styles.authTitle}>Access Required</Text>
+              <Text style={styles.authDesc}>
+                Please log in or create a new account to view and manage your profile details.
+              </Text>
+
+              <TouchableOpacity
+                style={styles.authLoginBtn}
+                activeOpacity={0.8}
+                onPress={() => router.push('/member-login')}
+              >
+                <Text style={styles.authLoginBtnText}>Sign In</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.authRegisterBtn}
+                activeOpacity={0.8}
+                onPress={() => router.push('/member-register')}
+              >
+                <Text style={styles.authRegisterBtnText}>Create Free Account</Text>
+              </TouchableOpacity>
+
+              <View style={{ marginTop: 36 }}>
+                <TouchableOpacity style={styles.logoutButton} activeOpacity={0.9} onPress={handleLogout}>
+                  <View style={styles.logoutIconWrap}>
+                    <Feather name="log-out" size={16} color="#C64545" />
+                  </View>
+                  <View style={styles.logoutTextWrap}>
+                    <Text style={styles.logoutText}>Logout</Text>
+                    <Text style={styles.logoutHint}>Sign out from this device securely</Text>
+                  </View>
+                  <Feather name="chevron-right" size={16} color="#D98686" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1051,5 +1144,71 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     color: '#A1A9B3',
     fontWeight: '400',
+  },
+  authIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: 'rgba(47, 136, 232, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(47, 136, 232, 0.15)',
+    alignSelf: 'center',
+    marginTop: 12,
+  },
+  authTitle: {
+    fontFamily: 'Inter',
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0C1016',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  authDesc: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    lineHeight: 22,
+    color: '#546273',
+    textAlign: 'center',
+    marginBottom: 32,
+    paddingHorizontal: 16,
+  },
+  authLoginBtn: {
+    width: '100%',
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: '#2F88E8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    shadowColor: '#2F88E8',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  authLoginBtnText: {
+    fontFamily: 'Inter',
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  authRegisterBtn: {
+    width: '100%',
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#2F88E8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  authRegisterBtnText: {
+    fontFamily: 'Inter',
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2F88E8',
   },
 });

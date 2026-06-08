@@ -5,6 +5,8 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Image, Alert } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { addCounselorNotification } from '@/components/notification-store';
 import { addBookedSession } from '@/components/session-store';
+import { useAuthContext } from '@/components/AuthContext';
+import AuthRequiredModal from '@/components/AuthRequiredModal';
 
 type ConsultationMode = 'video' | 'voice';
 
@@ -72,6 +74,8 @@ function getCalendarDays(monthDate: Date): CalendarDay[] {
 }
 
 export default function ScheduleSessionPage() {
+  const { userRole } = useAuthContext();
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const params = useLocalSearchParams<{
     name?: string;
     title?: string;
@@ -185,6 +189,11 @@ export default function ScheduleSessionPage() {
   };
 
   const handleConfirmBooking = () => {
+    if (userRole !== 'member') {
+      setShowAuthModal(true);
+      return;
+    }
+
     if (!selectedSlot) {
       Alert.alert('No Time Slot Selected', 'Please select an available future time slot.');
       return;
@@ -462,6 +471,15 @@ export default function ScheduleSessionPage() {
           </TouchableOpacity>
         </View>
       </View>
+
+      <AuthRequiredModal
+        visible={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onLogin={() => {
+          setShowAuthModal(false);
+          router.push('/member-login');
+        }}
+      />
     </SafeAreaView>
   );
 }
