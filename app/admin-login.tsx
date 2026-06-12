@@ -69,7 +69,7 @@ export default function AdminLoginScreen() {
               if (router.canGoBack()) {
                 router.back();
               } else {
-                router.replace('/(tabs)');
+                router.replace('/role-selection');
               }
             }}
             activeOpacity={0.7}

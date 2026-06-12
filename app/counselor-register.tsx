@@ -337,7 +337,11 @@ export default function CounselorRegisterScreen() {
 
             <View style={styles.signInRow}>
               <Text style={styles.signInPrompt}>Already have an account?</Text>
-              <TouchableOpacity activeOpacity={0.85} onPress={handleSignIn}>
+              <TouchableOpacity 
+                activeOpacity={0.85} 
+                onPress={handleSignIn}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
                 <Text style={styles.signInLink}>Sign in</Text>
               </TouchableOpacity>
             </View>
@@ -519,15 +523,15 @@ const styles = StyleSheet.create({
   },
   signInPrompt: {
     fontFamily: "Inter",
-    fontSize: 12,
-    lineHeight: 19,
+    fontSize: 14,
+    lineHeight: 20,
     color: "#3D3D3D",
     fontWeight: "600",
   },
   signInLink: {
     fontFamily: "Inter",
-    fontSize: 12,
-    lineHeight: 19,
+    fontSize: 14,
+    lineHeight: 20,
     color: "#0F8AF1",
     fontWeight: "700",
   },

@@ -295,7 +295,7 @@ export default function ProfilePage() {
           } catch (e) {
             // silent
           }
-          router.replace('/(tabs)');
+          router.replace('/role-selection');
         },
       },
     ]);

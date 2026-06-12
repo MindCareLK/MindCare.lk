@@ -42,7 +42,7 @@ export default function RoleSelectionScreen() {
       if (userRole === 'admin') {
         router.replace('/(admin-tabs)/dashboard');
       } else if (userRole === 'counselor') {
-        router.replace('/(counselor-tabs)/dashboard');
+        router.replace('/(counselor-tabs)/overview');
       } else if (userRole === 'member') {
         router.replace('/(main-tabs)/home');
       }
