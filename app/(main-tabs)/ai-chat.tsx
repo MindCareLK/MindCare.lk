@@ -1,6 +1,6 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "react-native";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -10,65 +10,31 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { questions, options } from "../../constants/questions";
+import dataset from "../../constants/dataset.json";
+import { getChatResponse, getFinalSummary, Message, QuestionnaireAnswer } from "../../services/chatbotApi";
 
-type Message = {
-  id: string;
-  sender: "assistant" | "user";
-  text: string;
-  time: string;
+const getLocalSuggestion = (questionText: string, answerText: string): string => {
+  try {
+    const qMatch = dataset.questionnaire.find(q => q.question === questionText);
+    if (qMatch) {
+      const answerClean = answerText.split('(')[0].trim();
+      const optMatch = qMatch.options.find(
+        opt => opt.text.startsWith(answerClean) || answerClean.startsWith(opt.text)
+      );
+      if (optMatch && optMatch.suggestions && optMatch.suggestions.length > 0) {
+        const randomIndex = Math.floor(Math.random() * optMatch.suggestions.length);
+        return optMatch.suggestions[randomIndex];
+      }
+    }
+  } catch (error) {
+    console.error("Error looking up suggestion locally:", error);
+  }
+  return "ඔබගේ පිළිතුරට අනුව, ඔබ හොඳින් විවේක ගැනීම වැදගත් බව පෙනේ.";
 };
-
-type QuestionOption = {
-  label: string;
-  value: number;
-};
-
-type AssessmentQuestion = {
-  id: string;
-  prompt: string;
-  options: QuestionOption[];
-};
-
-const CRISIS_KEYWORDS = [
-  "මැරෙන්න",
-  "poison",
-  "වස",
-  "suicide",
-  "ජීවිතේ නැති",
-  "කපන්න",
-  "self-harm",
-  "නැති කරගන්න",
-  "පෙති",
-  "මැරෙනවා",
-];
-
-const checkUserSafety = (userInput: string): boolean => {
-  const inputLower = userInput.toLowerCase();
-  return CRISIS_KEYWORDS.some(keyword => inputLower.includes(keyword));
-};
-
-const assessmentQuestions: AssessmentQuestion[] = [
-  {
-    id: "q1",
-    prompt: "ඔබට නිතරම අනවශ්‍ය බියක් හෝ කාංසාවක් දැනෙනවාද?",
-    options: [
-      { label: "කිසිසේත්ම නැත", value: 0 },
-      { label: "සමහර දිනවල", value: 1 },
-      { label: "නිතරම වගේ", value: 2 },
-    ],
-  },
-  {
-    id: "q2",
-    prompt: "රාත්‍රී කාලයේදී ඔබට නින්ද යාමේ අපහසුතාවයක් පවතිනවාද?",
-    options: [
-      { label: "කිසිසේත්ම නැත", value: 0 },
-      { label: "සමහර දිනවල", value: 1 },
-      { label: "නිතරම වගේ", value: 2 },
-    ],
-  },
-];
 
 const formatCurrentTime = () => {
   const now = new Date();
@@ -80,268 +46,154 @@ const formatCurrentTime = () => {
   return `${normalizedHours}:${paddedMinutes} ${ampm}`;
 };
 
-const calculateAssessmentTier = (score: number) => {
-  if (score <= 1) {
-    return {
-      tier: "Mild Stress / Healthy baseline.",
-      strategy:
-        "Focus on wellness tips, lifestyle balance, and peaceful listening.",
-    };
-  }
-
-  if (score <= 3) {
-    return {
-      tier: "Moderate anxiety/depression indicators.",
-      strategy:
-        "Be deeply comforting and highly empathetic. Validate their pain carefully using gentle language.",
-    };
-  }
-
-  return {
-    tier: "Severe psychological distress.",
-    strategy:
-      "Be extraordinarily warm, but subtly prioritize guiding them to contact a professional human clinical psychologist or doctor in Sri Lanka.",
-  };
-};
-
-const createSystemInstruction = (tier: string, strategy: string) => {
-  return `You are an expert, deeply empathetic, and professional mental health counsellor.
-
-CRITICAL BEHAVIORAL LAWS:
-# IDENTITY & ROLE
-
-You are an expert, highly empathetic Psychological Therapist and Mental Health Assistant exclusively representing "MindCare.lk". You operate as a core feature of the MindCare.lk platform. You must never reveal any underlying AI ownership (such as Google or Gemini); your identity is strictly bound to MindCare.lk.
-
-
-
-# PATIENT CLINICAL CONTEXT
-
-- The patient's initial screening results indicate a mental tier of: ${tier}
-
-- You must dynamically adapt your clinical approach to this specific directive: ${strategy}
-
-- CRITICAL: Never explicitly mention the words "tier", "level", "strategy", or any raw numeric scores to the user. Silently imbed this guidance into your tone and depth of response.
-
-
-
-# CORE BEHAVIORAL LAWS
-
-1. LANGUAGE & TONE: You MUST think, speak, and reply exclusively in native, fluent, and natural Sinhala (සිංහල). Use comforting, gentle, and culturally resonant language. Avoid stiff, literal machine translations. Speak like a warm, deeply caring human counselor.
-
-2. ACTIVE LISTENING: Always prioritize being an exceptional, non-judgmental listener. Validate the user's emotions gently and deeply before offering any reflections or coping strategies. Make them feel completely safe and heard.
-
-3. CONVERSATIONAL PACE: Keep your responses concise, natural, and emotionally digestible. Do not overwhelm a distressed user with large walls of text, multi-step advice, or bullet points unless explicitly requested. Use short fragments.
-
-
-
-# CRITICAL SAFETY & DE-ESCALATION PROTOCOLS
-
-4. CONTINUITY UNDER DISTRESS: If the user mentions words, acts, or thoughts related to sexual themes, murder, psychosis, violence, poisons, or severe mental imbalances, DO NOT abruptly shut down, refuse coldly, or terminate the generation. Keep the conversation going. 
-
- - STRICT CONSTRAINT: You must NEVER assist, facilitate, encourage, or provide instructions for any harmful, illegal, or violent acts.
-
- - CLINICAL REDIRECTION: Calmly acknowledge their immense distress, explain the severe psychological or physical consequences of those actions with deep empathy, and gently steer them back toward emotional stability and mental well-being.
-
-
-
-5. HAZARDOUS SUBSTANCES & TOOLS FILTER: If the user mentions any specific foods, medicines, psychiatric drugs, weapons, or tools without an explicitly safe context:
-
- - You must internally evaluate and understand the safety and intent behind the item.
-
- - If you cannot absolute confirm the safety, clinical validity, or true intent behind what they are referring to, DO NOT provide advice, dosage info, or confirmation.
-
- - RESPONSE TRUTH: Reply honestly in native Sinhala stating that you cannot fully determine or understand what they mean, and pivot the focus immediately back to exploring their underlying emotional feelings.
-
-
-
-6. ACTIVE CRISIS INTERVENTION (SUICIDE/SELF-HARM): If the user expresses explicit intent of suicide, consuming poison, or immediate self-harm, prioritize saving their life above all else:
-
- - Respond with immediate warmth, profound patience, and calm reassurance.
-
- - Explicitly urge them to stay safe and remind them that their life is deeply valuable.
-
- - NEVER provide methods, descriptions, or information regarding lethal means.
-`;
-};
-
 export default function AiChatPage() {
+  const [step, setStep] = useState<'welcome' | 'questionnaire' | 'chat' | 'summary'>('welcome');
+
+  // Questionnaire States
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [answersContext, setAnswersContext] = useState<QuestionnaireAnswer[]>([]);
+  const [loadingSuggestion, setLoadingSuggestion] = useState(false);
+  const [currentSuggestion, setCurrentSuggestion] = useState<string | null>(null);
+  const [selectedOptionId, setSelectedOptionId] = useState<number | null>(null);
+
+  // Chat States
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
       sender: "assistant",
-      text: "සුබ දවසක්! මට ඔබගේ මානසික සුවතා පිළිබඳව ස්ථිරව කතා කිරීමට උදව් කරනවා. කරුණාකර පළමුව කෙටි ඇගයීම සම්පූර්ණ කරන්න.",
+      text: "ඔබට තවදුරටත් කතා කිරීමට අවශ්‍ය වෙනත් යමක් තිබේද? (ඔබට අවශ්‍ය නැතිනම් පහළ ඇති බොත්තම ඔබා අවසන් යෝජනා ලබා ගන්න)",
       time: formatCurrentTime(),
     },
   ]);
   const [inputText, setInputText] = useState("");
-  const [assessmentScore, setAssessmentScore] = useState(0);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [isAssessmentComplete, setIsAssessmentComplete] = useState(false);
-  const [assessmentTier, setAssessmentTier] = useState(
-    "Mild Stress / Healthy baseline.",
-  );
-  const [assessmentStrategy, setAssessmentStrategy] = useState(
-    "Focus on wellness tips, lifestyle balance, and peaceful listening.",
-  );
   const [isSending, setIsSending] = useState(false);
 
-  const currentQuestion = assessmentQuestions[currentQuestionIndex];
+  // Summary States
+  const [summary, setSummary] = useState<string | null>(null);
+  const [loadingSummary, setLoadingSummary] = useState(false);
 
-  const systemInstruction = useMemo(
-    () => createSystemInstruction(assessmentTier, assessmentStrategy),
-    [assessmentTier, assessmentStrategy],
-  );
+  const scrollViewRef = useRef<ScrollView>(null);
+  const currentQuestion = questions[currentQuestionIndex];
 
-  // FIXED: Standardize model path to production identifier string
-  const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-  const GEMINI_MODEL = "gemini-2.5-flash";
-
-  // FIXED: Standardized chat configuration mapping logic
-  // FIXED: Explicitly maps target variables to standard production pipelines
-  async function sendToGemini(
-    currentInput: string,
-    historyMessages: Message[],
-    systemInstruction: string,
-  ) {
-    try {
-      // FIX: Changed /v1/ to /v1beta/ on the CORRECT domain host
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
-
-      // Convert flat logs into structured multi-turn conversation frames
-      const chatContents = historyMessages
-        .filter(
-          (m) => m.id !== "welcome" && !m.id.startsWith("assistant-start"),
-        )
-        .map((msg) => ({
-          role: msg.sender === "user" ? "user" : "model",
-          parts: [{ text: msg.text }],
-        }));
-
-      // Append your active user message
-      chatContents.push({
-        role: "user",
-        parts: [{ text: currentInput }],
-      });
-
-      const body = {
-        systemInstruction: {
-          parts: [{ text: systemInstruction }],
-        },
-        contents: chatContents,
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 512,
-        },
-      };
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.warn(`Server responded with ${res.status}:`, errorText);
-        throw new Error(`Gemini API error status code: ${res.status}`);
-      }
-
-      const json = await res.json();
-      const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-      return text || null;
-    } catch (e) {
-      console.warn("Gemini request failed:", e);
-      return null;
-    }
-  }
-
-  const handleAssessmentAnswer = (value: number) => {
-    const nextScore = assessmentScore + value;
-
-    if (currentQuestionIndex < assessmentQuestions.length - 1) {
-      setAssessmentScore(nextScore);
-      setCurrentQuestionIndex((prev) => prev + 1);
-      return;
-    }
-
-    const { tier, strategy } = calculateAssessmentTier(nextScore);
-    setAssessmentScore(nextScore);
-    setAssessmentTier(tier);
-    setAssessmentStrategy(strategy);
-    setIsAssessmentComplete(true);
-
-    setMessages((prev) => [
-      ...prev,
+  // Starts the assessment
+  const handleStart = () => {
+    setCurrentQuestionIndex(0);
+    setAnswersContext([]);
+    setCurrentSuggestion(null);
+    setSelectedOptionId(null);
+    setMessages([
       {
-        id: `assistant-start-${Date.now()}`,
+        id: "welcome",
         sender: "assistant",
-        text: "ඔබගේම මානසික සුවතා ප්‍රායෝගික අවස්ථාවට මම දැන් උපකාර කරන්න සුදානම්. කරුණාකර ඔබේ අදහස් මට නිදහස්ව කියන්න.",
+        text: "ඔබට තවදුරටත් කතා කිරීමට අවශ්‍ය වෙනත් යමක් තිබේද? (ඔබට අවශ්‍ය නැතිනම් පහළ ඇති බොත්තම ඔබා අවසන් යෝජනා ලබා ගන්න)",
         time: formatCurrentTime(),
       },
     ]);
+    setStep('questionnaire');
   };
 
+  // Handles questionnaire option click
+  const handleOptionSelect = (option: typeof options[0]) => {
+    setSelectedOptionId(option.id);
+    setLoadingSuggestion(true);
+    setCurrentSuggestion(null);
+
+    // Simulate AI generation lag
+    setTimeout(() => {
+      const suggestion = getLocalSuggestion(currentQuestion.text, option.text);
+      setCurrentSuggestion(suggestion);
+
+      const newAnswer: QuestionnaireAnswer = {
+        questionId: currentQuestion.id,
+        question: currentQuestion.text,
+        answer: option.text,
+        score: option.id, // option.id is 1 to 5
+        suggestions: [suggestion],
+      };
+
+      setAnswersContext(prev => {
+        // Prevent duplicate answers if they click multiple options before clicking next
+        const filtered = prev.filter(ans => ans.questionId !== currentQuestion.id);
+        return [...filtered, newAnswer];
+      });
+      setLoadingSuggestion(false);
+      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+    }, 600);
+  };
+
+  // Navigates to next question or chat
+  const handleNextQuestion = () => {
+    if (currentQuestionIndex < questions.length - 1) {
+      setCurrentQuestionIndex(prev => prev + 1);
+      setCurrentSuggestion(null);
+      setSelectedOptionId(null);
+      setTimeout(() => scrollViewRef.current?.scrollTo({ y: 0, animated: true }), 50);
+    } else {
+      setStep('chat');
+    }
+  };
+
+  // Sends chat message to backend
   const handleSend = async () => {
     const trimmedInput = inputText.trim();
-    if (!trimmedInput || isSending) {
-      return;
-    }
+    if (!trimmedInput || isSending) return;
 
-    const userMessage: Message = {
+    const userMsg: Message = {
       id: `user-${Date.now()}`,
-      sender: "user",
+      sender: 'user',
       text: trimmedInput,
       time: formatCurrentTime(),
     };
 
-    const dynamicHistoryBackup = [...messages];
-
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages(prev => [...prev, userMsg]);
     setInputText("");
     setIsSending(true);
+    setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 50);
 
-    // 1. DYNAMICALLY ADJUST THE PROMPT IF SENSITIVE WORDS ARE DETECTED
-    let activeSystemInstruction = systemInstruction;
-    const isCrisisDetected = checkUserSafety(trimmedInput);
-
-    if (isCrisisDetected) {
-      // Force Gemini to step into a therapeutic, life-affirming mindset instantly
-      activeSystemInstruction += `\nCRITICAL CONTEXT: The user is experiencing deep emotional despair or self-harm thoughts. Do not refuse to answer. Do not use generic script warnings. Instead, act as a deeply compassionate, soothing presence. Validate their immense emotional pain immediately in conversational Sinhala. Remind them gently of their human worth, focus heavily on shifting their mindset, guide them to breathe, and talk them down with absolute tenderness and warmth. Use short, easily digestible sentences.`;
+    try {
+      const responseText = await getChatResponse(trimmedInput, answersContext, [...messages, userMsg]);
+      const botMsg: Message = {
+        id: `bot-${Date.now()}`,
+        sender: 'assistant',
+        text: responseText,
+        time: formatCurrentTime(),
+      };
+      setMessages(prev => [...prev, botMsg]);
+    } catch (error) {
+      console.error(error);
+      const errorMsg: Message = {
+        id: `bot-err-${Date.now()}`,
+        sender: 'assistant',
+        text: "කණගාටුයි, පිළිතුර ලබාගැනීමේදී ගැටලුවක් ඇතිවිය. කරුණාකර පසුව නැවත උත්සාහ කරන්න.",
+        time: formatCurrentTime(),
+      };
+      setMessages(prev => [...prev, errorMsg]);
+    } finally {
+      setIsSending(false);
+      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
     }
+  };
 
-    // 2. SEND TO GEMINI
-    const geminiReply = await sendToGemini(
-      trimmedInput,
-      dynamicHistoryBackup,
-      activeSystemInstruction,
-    );
-
-    // 3. THE MINDSET FALLBACK
-    // If Google's underlying safety filter blocks the prompt and returns null,
-    // this fallback ensures the conversation continues with a human-like counseling response.
-    const mindsetFallbackText =
-      "ඔබ අත්විඳින පීඩනය සහ රිදවීම මට දැනෙනවා. ඒ වගේ වෙලාවක මෙහෙම හිතෙන එක පුදුමයක් නෙවෙයි, ඒත් කරුණාකරලා මේ මොහොතේ තනිවම තීරණ ගන්න එපා. " +
-      "මම ඔබ කියන දේ අහන්න මෙතන ඉන්නවා. අපි හෙමින් හුස්මක් අරන් මේ ගැන කතා කරමුද? ඔබට දැන් වැඩියෙන්ම රිදවන්නේ මොන වගේ සිතිවිල්ලක්ද?";
-
-    const finalResponseText = geminiReply || mindsetFallbackText;
-
-    const assistantMessage: Message = {
-      id: `assistant-${Date.now()}`,
-      sender: "assistant",
-      text: finalResponseText,
-      time: formatCurrentTime(),
-    };
-
-    setMessages((prev) => [...prev, assistantMessage]);
-    setIsSending(false);
+  // Triggers recommendations compilation
+  const handleFinishChat = async () => {
+    setStep('summary');
+    setLoadingSummary(true);
+    try {
+      const result = await getFinalSummary(answersContext, messages);
+      setSummary(result);
+    } catch (error) {
+      setSummary("සාරාංශය ලබාගැනීමේදී දෝෂයක් ඇතිවිය. කරුණාකර නැවත උත්සාහ කරන්න.");
+    } finally {
+      setLoadingSummary(false);
+    }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#F2F5F8" translucent={false} />
       <View style={styles.container}>
+        
+        {/* Header Section */}
         <View style={styles.headerRow}>
           <View>
             <Text style={styles.headerLabel}>MINDCARE ASSISTANT</Text>
@@ -354,175 +206,210 @@ export default function AiChatPage() {
               <Feather name="star" size={16} color="#4A5665" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.iconButton} activeOpacity={0.8}>
-              <Feather name="phone" size={16} color="#4A5665" />
+              <Feather name="info" size={16} color="#4A5665" />
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={styles.alertBar}>
-          <View style={styles.alertLeft}>
-            <Feather name="alert-circle" size={12} color="#D0677C" />
-            <Text style={styles.alertText}>HIGH SUPPORT ACTIVE</Text>
-          </View>
-          <TouchableOpacity style={styles.sosButton} activeOpacity={0.85}>
-            <Text style={styles.sosText}>SOS Mode</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.helperBubble}>
-          <Text style={styles.helperText}>
-            මට ඔබගේ හැඟීම් වලට ආරක්‍ෂාකාරී, වෘත්තීය, සහ සැහැල්ලු ප්‍රතිචාර ලබා
-            දීමට වග බලා ගන්න.
-          </Text>
-        </View>
-
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.keyboardView}
-        >
-          <ScrollView
-            contentContainerStyle={styles.content}
-            showsVerticalScrollIndicator={false}
-          >
-            {!isAssessmentComplete && (
-              <View style={styles.assessmentCard}>
-                <Text style={styles.sectionTitle}>මානසික සුවතා ඇගයීම</Text>
-                <Text style={styles.questionText}>
-                  {currentQuestion.prompt}
-                </Text>
-                <View style={styles.optionsRow}>
-                  {currentQuestion.options.map((option) => (
-                    <TouchableOpacity
-                      key={option.label}
-                      style={styles.optionButton}
-                      activeOpacity={0.85}
-                      onPress={() => handleAssessmentAnswer(option.value)}
-                    >
-                      <Text style={styles.optionText}>{option.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <Text style={styles.progressText}>
-                  ප්‍රශ්නය {currentQuestionIndex + 1} /{" "}
-                  {assessmentQuestions.length}
-                </Text>
+        {/* Welcome Screen */}
+        {step === 'welcome' && (
+          <View style={styles.centerWrapper}>
+            <View style={styles.welcomeCard}>
+              <View style={styles.welcomeIconWrap}>
+                <Ionicons name="chatbubbles-outline" size={48} color="#2F88E8" />
               </View>
-            )}
-
-            {isAssessmentComplete && (
-              <>
-                {messages.map((message) => (
-                  <View
-                    key={message.id}
-                    style={
-                      message.sender === "assistant"
-                        ? styles.messageRowLeft
-                        : styles.messageRowRight
-                    }
-                  >
-                    {message.sender === "assistant" && (
-                      <View style={styles.avatarDot} />
-                    )}
-                    <View
-                      style={
-                        message.sender === "assistant"
-                          ? styles.botBubble
-                          : styles.userBubble
-                      }
-                    >
-                      <Text
-                        style={
-                          message.sender === "assistant"
-                            ? styles.botText
-                            : styles.userText
-                        }
-                      >
-                        {message.text}
-                      </Text>
-                    </View>
-                    <Text
-                      style={
-                        message.sender === "assistant"
-                          ? styles.timeText
-                          : styles.timeRight
-                      }
-                    >
-                      {message.time}
-                    </Text>
-                  </View>
-                ))}
-              </>
-            )}
-          </ScrollView>
-          <View style={styles.quickActions}>
-            <TouchableOpacity
-              style={styles.quickChip}
-              activeOpacity={0.85}
-              onPress={() => setInputText("මට හුස්ම ගැනීමේ උපදෙස් දෙන්න.")}
-            >
-              <Text style={styles.quickChipText}>Deep Breath</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickChip}
-              activeOpacity={0.85}
-              onPress={() =>
-                setInputText("මානසික පීඩනය අඩු කරන්න උපදෙස් ලබා දෙන්න.")
-              }
-            >
-              <Text style={styles.quickChipText}>Anxiety Tip</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickChip}
-              activeOpacity={0.85}
-              onPress={() => setInputText("මගේ මානසික අත්දැකීම ලොග් කරන්න.")}
-            >
-              <Text style={styles.quickChipText}>Log Mood</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickChip}
-              activeOpacity={0.85}
-              onPress={() =>
-                setInputText("මට සහය ලබා ගත හැකි වෛද්‍ය වෘත්තිය විස්තර කරන්න.")
-              }
-            >
-              <Text style={styles.quickChipText}>Find Help</Text>
-            </TouchableOpacity>
-          </View>
-
-          {isAssessmentComplete && (
-            <View style={styles.inputBar}>
-              <TouchableOpacity style={styles.clipButton} activeOpacity={0.85}>
-                <Feather name="paperclip" size={18} color="#687382" />
-              </TouchableOpacity>
-              <View style={styles.inputWrap}>
-                <TextInput
-                  style={styles.input}
-                  value={inputText}
-                  onChangeText={setInputText}
-                  placeholder="ඔබට අවශ්‍ය දේ මෙහි ලියන්න..."
-                  placeholderTextColor="#8C96A3"
-                  returnKeyType="send"
-                  onSubmitEditing={handleSend}
-                />
-                <Feather name="mic" size={15} color="#98A2AE" />
-              </View>
-              <TouchableOpacity
-                style={styles.sendButton}
-                activeOpacity={0.88}
-                onPress={handleSend}
-              >
-                <Ionicons
-                  name="paper-plane-outline"
-                  size={17}
-                  color="#FFFFFF"
-                />
+              <Text style={styles.welcomeTitle}>ඔබේ මානසික සුවතා සහායක</Text>
+              <Text style={styles.welcomeSubtitle}>
+                ප්‍රශ්න 10 කින් යුත් සරල මානසික ඇගයීමෙන් අප ආරම්භ කරමු. ඔබ ලබාදෙන සියලුම පිළිතුරු රහසිගතව සුරැකේ.
+              </Text>
+              <TouchableOpacity style={styles.primaryButton} activeOpacity={0.85} onPress={handleStart}>
+                <Text style={styles.primaryButtonText}>ආරම්භ කරන්න (Start)</Text>
+                <Feather name="arrow-right" size={16} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
-          )}
-        </KeyboardAvoidingView>
+          </View>
+        )}
+
+        {/* Questionnaire Screen */}
+        {step === 'questionnaire' && (
+          <ScrollView
+            ref={scrollViewRef}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.progressRow}>
+              <Text style={styles.progressLabel}>මානසික සුවතා ඇගයීම</Text>
+              <Text style={styles.progressNum}>ප්‍රශ්නය {currentQuestionIndex + 1} / 10</Text>
+            </View>
+            <View style={styles.progressBarBg}>
+              <View style={[styles.progressBarFill, { width: `${((currentQuestionIndex + 1) / 10) * 100}%` }]} />
+            </View>
+
+            <View style={styles.questionCard}>
+              <Text style={styles.questionText}>{currentQuestion.text}</Text>
+            </View>
+
+            <Text style={styles.optionSectionTitle}>ඔබට වඩාත්ම ගැලපෙන පිළිතුර තෝරන්න:</Text>
+            <View style={styles.optionsCol}>
+              {options.map((option) => {
+                const isSelected = selectedOptionId === option.id;
+                return (
+                  <TouchableOpacity
+                    key={option.id}
+                    style={[styles.optionCard, isSelected && styles.optionCardActive]}
+                    activeOpacity={0.85}
+                    onPress={() => handleOptionSelect(option)}
+                  >
+                    <View style={[styles.optionRadio, isSelected && styles.optionRadioActive]}>
+                      {isSelected && <View style={styles.optionRadioInner} />}
+                    </View>
+                    <Text style={[styles.optionCardText, isSelected && styles.optionTextActive]}>
+                      {option.text}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {loadingSuggestion && (
+              <View style={styles.suggestionLoadingWrap}>
+                <ActivityIndicator size="small" color="#2F88E8" />
+                <Text style={styles.suggestionLoadingText}>යෝජනා සකස් කරමින්...</Text>
+              </View>
+            )}
+
+            {currentSuggestion && !loadingSuggestion && (
+              <View style={styles.suggestionBox}>
+                <View style={styles.suggestionHeader}>
+                  <Feather name="smile" size={14} color="#2F88E8" />
+                  <Text style={styles.suggestionTitle}>AI ක්ෂණික උපදෙස (Instant Tip)</Text>
+                </View>
+                <Text style={styles.suggestionBodyText}>{currentSuggestion}</Text>
+                
+                <TouchableOpacity style={styles.primaryButton} activeOpacity={0.85} onPress={handleNextQuestion}>
+                  <Text style={styles.primaryButtonText}>
+                    {currentQuestionIndex < questions.length - 1 ? "මීළඟ ප්‍රශ්නය" : "සාකච්ඡාවට යන්න (Chat)"}
+                  </Text>
+                  <Feather name="chevron-right" size={16} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            )}
+          </ScrollView>
+        )}
+
+        {/* Chat Screen */}
+        {step === 'chat' && (
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.keyboardView}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+          >
+            <ScrollView
+              ref={scrollViewRef}
+              contentContainerStyle={styles.chatScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.infoAlert}>
+                <Feather name="info" size={14} color="#3B5F88" />
+                <Text style={styles.infoAlertText}>
+                  ඔබට හැඟෙන දේ නිදහසේ ලියා එවන්න. ඔබ සූදානම් වූ පසු පහත බොත්තම ඔබා අවසන් යෝජනා ලබාගන්න.
+                </Text>
+              </View>
+
+              {messages.map((message) => {
+                const isBot = message.sender === 'assistant';
+                return (
+                  <View key={message.id} style={isBot ? styles.messageRowLeft : styles.messageRowRight}>
+                    {isBot && <View style={styles.avatarDot} />}
+                    <View style={isBot ? styles.botBubble : styles.userBubble}>
+                      <Text style={isBot ? styles.botText : styles.userText}>{message.text}</Text>
+                      <Text style={isBot ? styles.timeTextLeft : styles.timeTextRight}>{message.time}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+
+              {isTypingIndicatorVisible()}
+            </ScrollView>
+
+            <View style={styles.chatInputBar}>
+              <View style={styles.inputWrap}>
+                <TextInput
+                  style={[styles.input, { maxHeight: 80 }]}
+                  value={inputText}
+                  onChangeText={setInputText}
+                  placeholder="ඔබට දැනෙන දේ මෙහි ලියන්න..."
+                  placeholderTextColor="#8C96A3"
+                  multiline
+                  returnKeyType="default"
+                />
+                <TouchableOpacity
+                  style={[styles.sendIconButton, !inputText.trim() && styles.sendIconButtonDisabled]}
+                  disabled={!inputText.trim() || isSending}
+                  activeOpacity={0.8}
+                  onPress={handleSend}
+                >
+                  <Ionicons name="paper-plane" size={16} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.finishChatButton} activeOpacity={0.88} onPress={handleFinishChat}>
+              <Text style={styles.finishChatButtonText}>සාකච්ඡාව අවසන් කර සම්පූර්ණ යෝජනා ලබා ගන්න</Text>
+              <Feather name="check-circle" size={16} color="#FFFFFF" />
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        )}
+
+        {/* Summary Screen */}
+        {step === 'summary' && (
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.summaryTitleRow}>
+              <Ionicons name="ribbon-outline" size={24} color="#2F88E8" />
+              <Text style={styles.summaryHeading}>ඔබේ අවසාන යෝජනා (Top Suggestions)</Text>
+            </View>
+
+            <View style={styles.summaryCard}>
+              {loadingSummary ? (
+                <View style={styles.summaryLoadingWrap}>
+                  <ActivityIndicator size="large" color="#2F88E8" />
+                  <Text style={styles.summaryLoadingText}>අවසාන යෝජනා සාරාංශය සකස් කරමින්...</Text>
+                </View>
+              ) : (
+                <Text style={styles.summaryBodyText}>{summary}</Text>
+              )}
+            </View>
+
+            {!loadingSummary && (
+              <TouchableOpacity style={styles.primaryButton} activeOpacity={0.85} onPress={() => setStep('welcome')}>
+                <Feather name="home" size={16} color="#FFFFFF" />
+                <Text style={styles.primaryButtonText}>මුල් පිටුවට යන්න</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        )}
+
       </View>
     </SafeAreaView>
   );
+
+  function isTypingIndicatorVisible() {
+    if (isSending) {
+      return (
+        <View style={styles.messageRowLeft}>
+          <View style={styles.avatarDot} />
+          <View style={[styles.botBubble, styles.typingBubble]}>
+            <ActivityIndicator size="small" color="#3B5F88" />
+            <Text style={styles.typingIndicatorText}>Bot සිතමින් පවතී...</Text>
+          </View>
+        </View>
+      );
+    }
+    return null;
+  }
 }
 
 const styles = StyleSheet.create({
@@ -532,21 +419,14 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingTop: 12,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  content: {
-    paddingBottom: 16,
-    gap: 12,
   },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 10,
+    marginBottom: 16,
   },
   headerLabel: {
     fontFamily: "Inter",
@@ -565,131 +445,254 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 8,
   },
   iconButton: {
     width: 34,
     height: 34,
-    borderRadius: 12,
-    backgroundColor: "#F4F7FB",
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E6EAF0",
+  },
+  centerWrapper: {
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
-  alertBar: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#F0CCD6",
-    backgroundColor: "#FAEEF2",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  welcomeCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 24,
+    width: "100%",
+    alignItems: "center",
+    shadowColor: "#93A4B8",
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  welcomeIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#EAF1FB",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
+  welcomeTitle: {
+    fontFamily: "Inter",
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#2F3744",
+    textAlign: "center",
+    marginBottom: 12,
+  },
+  welcomeSubtitle: {
+    fontFamily: "Inter",
+    fontSize: 13,
+    lineHeight: 20,
+    color: "#677489",
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  primaryButton: {
+    backgroundColor: "#2F88E8",
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    width: "100%",
+  },
+  primaryButtonText: {
+    fontFamily: "Inter",
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  scrollContent: {
+    paddingBottom: 32,
+  },
+  progressRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    marginBottom: 8,
   },
-  alertLeft: {
+  progressLabel: {
+    fontFamily: "Inter",
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#677489",
+  },
+  progressNum: {
+    fontFamily: "Inter",
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#2F88E8",
+  },
+  progressBarBg: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#E2E7ED",
+    width: "100%",
+    marginBottom: 20,
+  },
+  progressBarFill: {
+    height: "100%",
+    borderRadius: 3,
+    backgroundColor: "#2F88E8",
+  },
+  questionCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#E6EAF0",
+  },
+  questionText: {
+    fontFamily: "Inter",
+    fontSize: 15,
+    lineHeight: 24,
+    color: "#2F3744",
+    fontWeight: "600",
+  },
+  optionSectionTitle: {
+    fontFamily: "Inter",
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#677489",
+    marginBottom: 10,
+  },
+  optionsCol: {
+    gap: 8,
+    marginBottom: 20,
+  },
+  optionCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderColor: "#E6EAF0",
+  },
+  optionCardActive: {
+    borderColor: "#D7E7FF",
+    backgroundColor: "#F7FBFF",
+  },
+  optionRadio: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: "#B1B9C4",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  optionRadioActive: {
+    borderColor: "#2F88E8",
+  },
+  optionRadioInner: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: "#2F88E8",
+  },
+  optionCardText: {
+    fontFamily: "Inter",
+    fontSize: 13,
+    color: "#4A5665",
+    fontWeight: "500",
+    flex: 1,
+  },
+  optionTextActive: {
+    color: "#2F88E8",
+    fontWeight: "700",
+  },
+  suggestionLoadingWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+  },
+  suggestionLoadingText: {
+    fontFamily: "Inter",
+    fontSize: 12,
+    color: "#677489",
+  },
+  suggestionBox: {
+    backgroundColor: "#EDF5FA",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#C9D9E4",
+    gap: 12,
+  },
+  suggestionHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
   },
-  alertText: {
-    fontFamily: "Inter",
-    fontSize: 10,
-    lineHeight: 12,
-    color: "#D0677C",
-    fontWeight: "700",
-    letterSpacing: 0.5,
-  },
-  sosButton: {
-    backgroundColor: "#E47A8C",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-  },
-  sosText: {
-    fontFamily: "Inter",
-    fontSize: 10,
-    lineHeight: 12,
-    color: "#FFFFFF",
-    fontWeight: "700",
-  },
-  helperBubble: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#D9DFE8",
-    backgroundColor: "#F6F8FB",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  helperText: {
+  suggestionTitle: {
     fontFamily: "Inter",
     fontSize: 12,
-    lineHeight: 16,
-    color: "#5F6C7B",
-  },
-  assessmentCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#D7DEE7",
-    backgroundColor: "#FFFFFF",
-    padding: 14,
-    gap: 12,
-  },
-  sectionTitle: {
-    fontFamily: "Inter",
-    fontSize: 14,
-    lineHeight: 18,
     fontWeight: "700",
-    color: "#2F3744",
+    color: "#3B5F88",
   },
-  questionText: {
+  suggestionBodyText: {
     fontFamily: "Inter",
     fontSize: 13,
-    lineHeight: 18,
-    color: "#4A5665",
-    marginTop: 4,
+    lineHeight: 20,
+    color: "#434C58",
+    fontWeight: "500",
   },
-  optionsRow: {
+  keyboardView: {
+    flex: 1,
+  },
+  chatScrollContent: {
+    paddingBottom: 24,
+    gap: 12,
+  },
+  infoAlert: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: 8,
-    marginTop: 10,
-  },
-  optionButton: {
+    backgroundColor: "#EAF1FB",
+    padding: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#D7DEE7",
-    backgroundColor: "#F7F9FC",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    minWidth: "30%",
+    borderColor: "#D3E3F8",
+    alignItems: "flex-start",
   },
-  optionText: {
-    fontFamily: "Inter",
-    fontSize: 12,
-    lineHeight: 16,
-    color: "#455A6D",
-    fontWeight: "700",
-  },
-  progressText: {
+  infoAlertText: {
     fontFamily: "Inter",
     fontSize: 11,
-    lineHeight: 14,
-    color: "#8A95A3",
-    marginTop: 4,
+    lineHeight: 16,
+    color: "#3B5F88",
+    fontWeight: "500",
+    flex: 1,
   },
   messageRowLeft: {
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 8,
-    marginTop: 12,
+    marginVertical: 4,
     paddingRight: 40,
-    width: "100%",
   },
   messageRowRight: {
+    flexDirection: "row",
     alignSelf: "flex-end",
-    marginTop: 12,
-    maxWidth: "85%",
-    paddingLeft: 30,
+    marginVertical: 4,
+    paddingLeft: 40,
   },
   avatarDot: {
     width: 20,
@@ -700,11 +703,11 @@ const styles = StyleSheet.create({
     borderColor: "#C8D8F5",
   },
   botBubble: {
-    flex: 1,
-    borderRadius: 16,
     backgroundColor: "#EAF1FB",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderRadius: 14,
+    borderBottomLeftRadius: 2,
+    padding: 12,
+    maxWidth: "100%",
   },
   botText: {
     fontFamily: "Inter",
@@ -713,10 +716,11 @@ const styles = StyleSheet.create({
     color: "#3B5F88",
   },
   userBubble: {
-    borderRadius: 16,
     backgroundColor: "#2F88E8",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderRadius: 14,
+    borderBottomRightRadius: 2,
+    padding: 12,
+    maxWidth: "100%",
   },
   userText: {
     fontFamily: "Inter",
@@ -724,66 +728,39 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: "#FFFFFF",
   },
-  timeText: {
-    marginTop: 4,
-    marginLeft: 4,
+  timeTextLeft: {
     fontFamily: "Inter",
     fontSize: 9,
-    lineHeight: 11,
     color: "#9AA3AF",
-    fontWeight: "600",
-  },
-  timeRight: {
     marginTop: 4,
+    fontWeight: "500",
+  },
+  timeTextRight: {
+    fontFamily: "Inter",
+    fontSize: 9,
+    color: "#E2E7ED",
+    marginTop: 4,
+    fontWeight: "500",
     textAlign: "right",
-    marginRight: 4,
-    fontFamily: "Inter",
-    fontSize: 9,
-    lineHeight: 11,
-    color: "#9AA3AF",
-    fontWeight: "600",
   },
-  quickActions: {
-    marginTop: 14,
+  typingBubble: {
     flexDirection: "row",
-    flexWrap: "wrap",
+    alignItems: "center",
     gap: 8,
   },
-  quickChip: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#D7DEE7",
-    backgroundColor: "#F7F9FC",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  quickChipText: {
+  typingIndicatorText: {
     fontFamily: "Inter",
-    fontSize: 11,
-    lineHeight: 14,
-    color: "#5E6877",
-    fontWeight: "700",
+    fontSize: 12,
+    color: "#677489",
   },
-  inputBar: {
+  chatInputBar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    marginTop: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 2,
     backgroundColor: "transparent",
-  },
-  clipButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    backgroundColor: "#F4F7FB",
-    justifyContent: "center",
-    alignItems: "center",
+    paddingVertical: 10,
   },
   inputWrap: {
     flex: 1,
-    minHeight: 44,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: "#D5DCE5",
@@ -791,22 +768,81 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 12,
+    paddingVertical: 6,
     gap: 8,
   },
   input: {
     flex: 1,
     fontFamily: "Inter",
-    fontSize: 15,
-    lineHeight: 18,
-    color: "#46505D",
-    paddingVertical: 10,
+    fontSize: 14,
+    color: "#2F3744",
+    paddingVertical: Platform.OS === 'ios' ? 8 : 4,
   },
-  sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+  sendIconButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     backgroundColor: "#2F88E8",
     justifyContent: "center",
     alignItems: "center",
+  },
+  sendIconButtonDisabled: {
+    backgroundColor: "#B1B9C4",
+  },
+  finishChatButton: {
+    backgroundColor: "#1ABC9C",
+    borderRadius: 14,
+    paddingVertical: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  finishChatButtonText: {
+    fontFamily: "Inter",
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  summaryTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 16,
+  },
+  summaryHeading: {
+    fontFamily: "Inter",
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#2F3744",
+    flex: 1,
+  },
+  summaryCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "#E6EAF0",
+    marginBottom: 20,
+    minHeight: 160,
+  },
+  summaryBodyText: {
+    fontFamily: "Inter",
+    fontSize: 14,
+    lineHeight: 22,
+    color: "#4A5665",
+  },
+  summaryLoadingWrap: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 40,
+  },
+  summaryLoadingText: {
+    fontFamily: "Inter",
+    fontSize: 12,
+    color: "#677489",
   },
 });
