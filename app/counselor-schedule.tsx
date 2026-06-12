@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   Modal,
   Pressable,
@@ -13,6 +13,9 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { auth, db } from "@/lib/firebase";
+import { getCounselorProfile } from "@/lib/counselors";
+import { doc, setDoc } from "firebase/firestore";
 
 type ScheduleParams = {
   name?: string | string[];
@@ -218,6 +221,26 @@ export default function CounselorScheduleScreen() {
   const [savedTemplatesByDate, setSavedTemplatesByDate] = useState<Record<string, DayTemplate>>(
     {},
   );
+  // Fetch counselor schedules on mount
+  useEffect(() => {
+    const user = auth?.currentUser;
+    if (!user) return;
+
+    const loadSchedules = async () => {
+      try {
+        const profile = await getCounselorProfile(user.uid);
+        if (profile && (profile as any).schedules) {
+          setTemplatesByDate((profile as any).schedules);
+          setSavedTemplatesByDate(cloneTemplatesByDate((profile as any).schedules));
+        }
+      } catch (err) {
+        console.error("Error loading counselor schedules:", err);
+      }
+    };
+
+    void loadSchedules();
+  }, []);
+
   const [feedbackModal, setFeedbackModal] = useState<{
     visible: boolean;
     title: string;
@@ -406,6 +429,16 @@ export default function CounselorScheduleScreen() {
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setSavedDefaultTemplate(cloneTemplate(defaultTemplate));
     setSavedTemplatesByDate(cloneTemplatesByDate(templatesByDate));
+
+    const user = auth?.currentUser;
+    if (user && db) {
+      setDoc(doc(db, 'counselors', user.uid), {
+        schedules: templatesByDate
+      }, { merge: true }).catch(err => {
+        console.error("Error saving counselor schedules to Firestore:", err);
+      });
+    }
+
     setFeedbackModal({
       visible: true,
       title: "Availability saved",

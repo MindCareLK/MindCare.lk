@@ -133,6 +133,7 @@ export default function CounselorsPage() {
                   router.push({
                     pathname: '/schedule-session',
                     params: {
+                      uid: item.uid,
                       name: item.displayName || item.fullName,
                       title: item.specialty,
                       years: `${Math.max(item.qualifications.length, 1)} credentials`,

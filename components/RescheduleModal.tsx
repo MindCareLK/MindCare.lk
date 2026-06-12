@@ -8,7 +8,7 @@ export type RescheduleSession = {
   specialty: string;
   date: string;
   time: string;
-  status: 'Upcoming' | 'Completed';
+  status: 'Upcoming' | 'Completed' | 'Pending';
   actions?: boolean;
 };
 

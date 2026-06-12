@@ -558,12 +558,20 @@ export default function ProfilePage() {
                       <View
                         style={[
                           styles.statusPill,
-                          session.status === 'Upcoming' ? styles.statusPillUpcoming : styles.statusPillCompleted,
+                          session.status === 'Upcoming'
+                            ? styles.statusPillUpcoming
+                            : session.status === 'Pending'
+                            ? styles.statusPillPending
+                            : styles.statusPillCompleted,
                         ]}>
                         <Text
                           style={[
                             styles.statusText,
-                            session.status === 'Upcoming' ? styles.statusTextUpcoming : styles.statusTextCompleted,
+                            session.status === 'Upcoming'
+                              ? styles.statusTextUpcoming
+                              : session.status === 'Pending'
+                              ? styles.statusTextPending
+                              : styles.statusTextCompleted,
                           ]}>
                           {session.status}
                         </Text>
@@ -961,6 +969,9 @@ const styles = StyleSheet.create({
   statusPillUpcoming: {
     backgroundColor: '#E5FAEB',
   },
+  statusPillPending: {
+    backgroundColor: '#FFEAD4',
+  },
   statusPillCompleted: {
     backgroundColor: '#EFF2F5',
   },
@@ -972,6 +983,9 @@ const styles = StyleSheet.create({
   },
   statusTextUpcoming: {
     color: '#1B9C4B',
+  },
+  statusTextPending: {
+    color: '#FF8800',
   },
   statusTextCompleted: {
     color: '#768395',
