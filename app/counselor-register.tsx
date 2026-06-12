@@ -195,6 +195,19 @@ export default function CounselorRegisterScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            activeOpacity={0.8}
+            onPress={() => {
+              void Haptics.selectionAsync();
+              router.back();
+            }}
+          >
+            <Feather name="chevron-left" size={34} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+
         <Text style={styles.title}>Create Account</Text>
         <Text style={styles.subtitle}>
           join Mindcare and start your journey to wellness
@@ -370,6 +383,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#2F88E8",
+  },
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  backButton: {
+    width: 34,
+    height: 34,
+    justifyContent: "center",
+    alignItems: "center",
   },
   title: {
     marginTop: 24,

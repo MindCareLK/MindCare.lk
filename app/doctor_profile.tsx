@@ -1,10 +1,14 @@
 import { Feather, FontAwesome, Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import React from 'react';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuthContext } from '@/components/AuthContext';
+import AuthRequiredModal from '@/components/AuthRequiredModal';
 
 export default function DoctorProfilePage() {
+  const { userRole } = useAuthContext();
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const params = useLocalSearchParams<{
     name?: string;
     title?: string;
@@ -114,7 +118,13 @@ export default function DoctorProfilePage() {
           {/* Primary Action Button */}
           <TouchableOpacity 
             style={styles.bookButton} 
-            onPress={() => router.push('/counselors')} // Logic to go back to scheduling
+            onPress={() => {
+              if (userRole !== 'member') {
+                setShowAuthModal(true);
+                return;
+              }
+              router.push('/counselors');
+            }}
           >
             <Text style={styles.bookButtonText}>Book Appointment</Text>
           </TouchableOpacity>
@@ -140,6 +150,15 @@ export default function DoctorProfilePage() {
           </TouchableOpacity>
         </View>
       </View>
+
+      <AuthRequiredModal
+        visible={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onLogin={() => {
+          setShowAuthModal(false);
+          router.push('/member-login');
+        }}
+      />
     </SafeAreaView>
   );
 }

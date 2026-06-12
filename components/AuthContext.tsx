@@ -1,7 +1,8 @@
 import { onAuthStateChanged, type User } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { getMemberProfile } from '@/lib/members';
 
 export type MemberProfile = {
@@ -11,11 +12,14 @@ export type MemberProfile = {
   dob: string;
 };
 
+export type UserRole = 'member' | 'counselor' | 'admin' | null;
+
 type AuthContextValue = {
   currentUser: User | null;
   memberProfile: MemberProfile;
   setMemberProfile: (profile: MemberProfile) => void;
   isAuthReady: boolean;
+  userRole: UserRole;
 };
 
 const emptyProfile: MemberProfile = {
@@ -30,6 +34,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(auth?.currentUser ?? null);
   const [memberProfile, setMemberProfile] = useState<MemberProfile>(emptyProfile);
+  const [userRole, setUserRole] = useState<UserRole>(null);
   const [isAuthReady, setIsAuthReady] = useState(!auth);
 
   useEffect(() => {
@@ -39,14 +44,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
       setCurrentUser(nextUser);
-      setIsAuthReady(true);
 
       if (!nextUser) {
         setMemberProfile(emptyProfile);
+        setUserRole(null);
+        setIsAuthReady(true);
         return;
       }
 
       void (async () => {
+        try {
+          if (db) {
+            // If counselor, do not populate member profile
+            const counselorRef = doc(db, 'counselors', nextUser.uid);
+            const counselorSnap = await getDoc(counselorRef);
+            if (counselorSnap.exists()) {
+              setMemberProfile(emptyProfile);
+              setUserRole('counselor');
+              setIsAuthReady(true);
+              return;
+            }
+
+            // If admin, do not populate member profile
+            const adminRef = doc(db, 'admins', nextUser.uid);
+            let adminSnap = await getDoc(adminRef);
+
+            const userEmail = nextUser.email?.toLowerCase();
+            if (!adminSnap.exists() && (userEmail === 'admin@gmail.com' || userEmail === 'admin@mindcare.lk')) {
+              try {
+                await setDoc(adminRef, {
+                  email: userEmail,
+                  role: 'admin',
+                  createdAt: new Date().toISOString(),
+                });
+                adminSnap = await getDoc(adminRef);
+              } catch (err) {
+                console.error("Error auto-creating admin doc in AuthContext:", err);
+              }
+            }
+
+            if (adminSnap.exists()) {
+              setMemberProfile(emptyProfile);
+              setUserRole('admin');
+              setIsAuthReady(true);
+              return;
+            }
+          }
+        } catch (e) {
+          // Fallback to regular flow on error
+        }
+
+        setUserRole('member');
         const savedProfile = await getMemberProfile(nextUser.uid);
 
         setMemberProfile(
@@ -64,6 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 dob: '',
               }
         );
+        setIsAuthReady(true);
       })();
     });
 
@@ -76,8 +125,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       memberProfile,
       setMemberProfile,
       isAuthReady,
+      userRole,
     }),
-    [currentUser, isAuthReady, memberProfile]
+    [currentUser, isAuthReady, memberProfile, userRole]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

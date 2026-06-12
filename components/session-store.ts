@@ -1,5 +1,7 @@
 import { collection, addDoc, updateDoc, doc, deleteDoc, query, where, onSnapshot, getDocs } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
+import { Alert } from 'react-native';
+import { router } from 'expo-router';
 
 import { useAuthContext } from '@/components/AuthContext';
 import { auth, db } from '@/lib/firebase';
@@ -123,7 +125,14 @@ export function useCounselorSessions(counselorName: string) {
 export async function addBookedSession(session: Omit<BookedSession, 'id'> | BookedSession) {
   const user = auth?.currentUser;
   if (!user || !db) {
-    console.warn('Cannot add session: User not authenticated or DB not initialized');
+    Alert.alert(
+      'Authentication Required',
+      'Please log in to your account to book a session.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Log In', onPress: () => router.push('/member-login') }
+      ]
+    );
     return;
   }
 
