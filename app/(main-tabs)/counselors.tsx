@@ -1,6 +1,6 @@
 import { Feather, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, Alert } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { StatusBar } from 'react-native';
@@ -66,7 +66,13 @@ export default function CounselorsPage() {
             </View>
           ) : null}
 
-          {counselors.map((item) => (
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#2F88E8" />
+              <Text style={styles.loadingText}>Fetching counselors...</Text>
+            </View>
+          ) : (
+            counselors.map((item) => (
             <View key={item.uid} style={styles.card}>
               <TouchableOpacity
                 activeOpacity={0.85}
@@ -138,7 +144,7 @@ export default function CounselorsPage() {
                 <Text style={styles.bookText}>Book Session</Text>
               </TouchableOpacity>
             </View>
-          ))}
+          )))}
 
           <View style={styles.verifiedCard}>
             <View style={styles.verifiedIcon}>
@@ -440,6 +446,18 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 12,
     lineHeight: 18,
+    color: '#7A8494',
+    fontWeight: '500',
+  },
+  loadingContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
     color: '#7A8494',
     fontWeight: '500',
   },

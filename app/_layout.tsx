@@ -102,6 +102,8 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="(main-tabs)" />
           <Stack.Screen name="(counselor-tabs)" />
+          <Stack.Screen name="(admin-tabs)" />
+          <Stack.Screen name="admin-login" />
           <Stack.Screen name="member-login" />
           <Stack.Screen name="counselor-login" />
           <Stack.Screen name="article-detail" />

@@ -1,5 +1,5 @@
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 import { auth, db } from '@/lib/firebase';
@@ -44,11 +44,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
       setCurrentUser(nextUser);
-      setIsAuthReady(true);
 
       if (!nextUser) {
         setMemberProfile(emptyProfile);
         setUserRole(null);
+        setIsAuthReady(true);
         return;
       }
 
@@ -61,15 +61,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (counselorSnap.exists()) {
               setMemberProfile(emptyProfile);
               setUserRole('counselor');
+              setIsAuthReady(true);
               return;
             }
 
             // If admin, do not populate member profile
             const adminRef = doc(db, 'admins', nextUser.uid);
-            const adminSnap = await getDoc(adminRef);
+            let adminSnap = await getDoc(adminRef);
+
+            const userEmail = nextUser.email?.toLowerCase();
+            if (!adminSnap.exists() && (userEmail === 'admin@gmail.com' || userEmail === 'admin@mindcare.lk')) {
+              try {
+                await setDoc(adminRef, {
+                  email: userEmail,
+                  role: 'admin',
+                  createdAt: new Date().toISOString(),
+                });
+                adminSnap = await getDoc(adminRef);
+              } catch (err) {
+                console.error("Error auto-creating admin doc in AuthContext:", err);
+              }
+            }
+
             if (adminSnap.exists()) {
               setMemberProfile(emptyProfile);
               setUserRole('admin');
+              setIsAuthReady(true);
               return;
             }
           }
@@ -95,6 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 dob: '',
               }
         );
+        setIsAuthReady(true);
       })();
     });
 

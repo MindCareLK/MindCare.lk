@@ -1,26 +1,43 @@
+import { useAuthContext } from "@/components/AuthContext";
 import { useRouter } from "expo-router";
 import LottieView from "lottie-react-native";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Image, StyleSheet, View } from "react-native";
 
 const Splash = () => {
   const router = useRouter();
+  const { isAuthReady, currentUser, userRole } = useAuthContext();
   const [showLoader, setShowLoader] = useState(false);
 
   useEffect(() => {
+    // We only want to set up timers if auth has been resolved
+    if (!isAuthReady) return;
+
     const timer1 = setTimeout(() => {
       setShowLoader(true);
     }, 2000);
 
     const timer2 = setTimeout(() => {
-      router.replace("/(main-tabs)/home"); // change to your screen name
+      if (currentUser) {
+        if (userRole === 'admin') {
+          router.replace('/(admin-tabs)/dashboard');
+        } else if (userRole === 'counselor') {
+          router.replace('/(counselor-tabs)/dashboard');
+        } else if (userRole === 'member') {
+          router.replace('/(main-tabs)/home');
+        } else {
+          router.replace("/(tabs)");
+        }
+      } else {
+        router.replace("/(tabs)");
+      }
     }, 4000);
 
     return () => {
       clearTimeout(timer1);
       clearTimeout(timer2);
     };
-  }, []);
+  }, [isAuthReady, currentUser, userRole, router]);
 
   return (
     <View style={styles.container}>

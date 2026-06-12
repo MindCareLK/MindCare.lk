@@ -27,7 +27,11 @@ export default function LoginScreen() {
 
   const handleBack = () => {
     void Haptics.selectionAsync();
-    router.back();
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)');
+    }
   };
 
   const handleSignIn = async () => {

@@ -8,8 +8,6 @@ service cloud.firestore {
     }
     
     // Helper function to check if user is the counselor
-    // Note: Since appointments store counselorId as the display name string (e.g. "Buddhini Perera"),
-    // we must dynamically lookup the logged-in counselor's profile to match their displayName.
     function isCounselor(appointmentData) {
       let isCounselorDoc = exists(/databases/$(database)/documents/counselors/$(request.auth.uid));
       let matchesName = isCounselorDoc && get(/databases/$(database)/documents/counselors/$(request.auth.uid)).data.displayName == appointmentData.counselorId;
@@ -21,66 +19,62 @@ service cloud.firestore {
       return request.auth != null && (isPatient(appointmentData) || isCounselor(appointmentData));
     }
 
-    // Helper function to check if the user is an admin
+    // Helper function to check if the user is an admin (via admins collection)
     function isAdmin() {
       return request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
     // Admin Profiles
     match /admins/{adminId} {
-      // Only the admin themselves can read their own profile
+      // Allow designated admin email to bootstrap their own document on first login
+      allow create: if request.auth != null 
+        && request.auth.uid == adminId 
+        && (request.auth.token.email == 'admin@gmail.com' || request.auth.token.email == 'admin@mindcare.lk');
+      // Admins can read their own profile
       allow read: if request.auth != null && request.auth.uid == adminId;
-      // No client-side writes — managed via Firebase Console
-      allow write: if false;
+      // No client-side updates or deletes
+      allow update, delete: if false;
     }
 
-    // Appointments Security
+    // Appointments
     match /appointments/{appointmentId} {
-      // Patients must be authenticated to book an appointment
       allow create: if request.auth != null;
-      // Only patients or counselors can list their own appointments; admins can list all
       allow list: if request.auth != null && (request.auth.uid == resource.data.patientId || request.auth.uid == resource.data.counselorUid || isAdmin());
-      // Only participants or admins can read, update or delete the exact appointment
       allow get, update, delete: if isParticipant(resource.data) || isAdmin();
     }
 
-    // WebRTC Calls Security
+    // WebRTC Calls
     match /calls/{roomId} {
-      // The roomId maps 1:1 with the appointmentId.
-      // We look up the appointment document to verify participation.
-      
-      // Allow callers to initiate the call document
       allow create: if request.auth != null;
-      // Only the exact patient and counselor for this appointment can access the room
       allow read, update, delete: if isParticipant(get(/databases/$(database)/documents/appointments/$(roomId)).data);
       
-      // Secure all ICE candidate subcollections (offerCandidates, answerCandidates)
       match /{document=**} {
         allow read, write: if isParticipant(get(/databases/$(database)/documents/appointments/$(roomId)).data);
       }
     }
     
-    // Member Profiles
+    // Members
     match /members/{memberId} {
-      // Patients can only write to their own profile; admins can read and delete
       allow read, write: if request.auth != null && request.auth.uid == memberId;
-      allow read, delete: if isAdmin();
+      allow list, read, delete: if isAdmin();
     }
     
-    // Counselor Profiles
+    // Counselors
     match /counselors/{counselorId} {
-      // Profiles are readable by patients to browse counselors
-      allow read: if true;
-      // Only the specific counselor can update their own profile
+      allow read, list: if true;
       allow write: if request.auth != null && request.auth.uid == counselorId;
-      // Admins can also delete counselor profiles
       allow delete: if isAdmin();
     }
     
     // Notifications
     match /notifications/{notificationId} {
-      // Counselors reading their own notifications
       allow read, write: if request.auth != null;
+    }
+    
+    // Articles
+    match /articles/{articleId} {
+      allow read, list: if true;
+      allow write: if isAdmin();
     }
   }
 }

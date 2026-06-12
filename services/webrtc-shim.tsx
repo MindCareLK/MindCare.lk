@@ -51,7 +51,7 @@ if (Platform.OS !== 'web') {
   try {
     WebRTC = require('react-native-webrtc');
   } catch (e) {
-    console.warn('[WebRTC Shim] react-native-webrtc native module is missing. Using fallback mocks.');
+    // react-native-webrtc native module is missing. Using fallback mocks.
   }
 }
 
@@ -181,7 +181,6 @@ if (Platform.OS === 'web') {
   Exported_RTCIceCandidate = MockRTCIceCandidate;
   Exported_mediaDevices = {
     getUserMedia: async (constraints?: any) => {
-      console.warn('[WebRTC Shim] getUserMedia fallback used. Native WebRTC module is missing.');
       return new MockMediaStream();
     }
   };
