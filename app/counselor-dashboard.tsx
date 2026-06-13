@@ -6,13 +6,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { signOut } from 'firebase/auth';
 
-import { markCounselorNotificationsAsRead, useCounselorNotifications } from '@/components/notification-store';
 import { getCounselorProfile } from '@/lib/counselors';
 import { getMemberProfile } from '@/lib/members';
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { useCounselorSessions } from '@/components/session-store';
+import { collection, query, where, onSnapshot, updateDoc, doc, addDoc } from 'firebase/firestore';
 
-function PatientName({ uid }: { uid: string }) {
+function PatientName({ uid, style }: { uid: string; style?: any }) {
   const [name, setName] = useState<string>('Loading...');
 
   useEffect(() => {
@@ -29,7 +29,7 @@ function PatientName({ uid }: { uid: string }) {
     return () => { isMounted = false; };
   }, [uid]);
 
-  return <Text style={styles.sessionName}>{name}</Text>;
+  return <Text style={style || styles.sessionName}>{name}</Text>;
 }
 
 export default function CounselorDashboardScreen() {
@@ -39,10 +39,22 @@ export default function CounselorDashboardScreen() {
   const [isNotificationsVisible, setIsNotificationsVisible] = useState(false);
   const [isAccountMenuVisible, setIsAccountMenuVisible] = useState(false);
   const [isLogoutConfirmVisible, setIsLogoutConfirmVisible] = useState(false);
-  const notifications = useCounselorNotifications();
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [pendingAppointments, setPendingAppointments] = useState<any[]>([]);
 
   const counselorSessions = useCounselorSessions(counselorName);
   const upcomingSessions = counselorSessions.filter(s => s.status === 'Upcoming');
+
+  const uniquePatientsCount = useMemo(() => {
+    const patientIds = counselorSessions.map(s => s.patientId).filter(Boolean);
+    return new Set(patientIds).size;
+  }, [counselorSessions]);
+
+  const hoursToday = useMemo(() => {
+    const todayStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const todaySessions = counselorSessions.filter(s => s.date === todayStr && s.status === 'Upcoming');
+    return (todaySessions.length * 0.75).toFixed(1);
+  }, [counselorSessions]);
 
   useEffect(() => {
     const user = auth?.currentUser;
@@ -65,6 +77,82 @@ export default function CounselorDashboardScreen() {
 
     void loadProfile();
   }, []);
+
+  useEffect(() => {
+    const user = auth?.currentUser;
+    if (!user || !db) return;
+
+    // Listen to notifications
+    const qNotif = query(
+      collection(db, 'notifications'),
+      where('counselorUid', '==', user.uid)
+    );
+    const unsubNotif = onSnapshot(qNotif, (snapshot) => {
+      const list = snapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      }));
+      list.sort((a: any, b: any) => b.createdAt - a.createdAt);
+      setNotifications(list);
+    }, (err) => {
+      console.error("Error fetching notifications from Firestore:", err);
+    });
+
+    // Listen to pending appointments
+    const qAppt = query(
+      collection(db, 'appointments'),
+      where('counselorUid', '==', user.uid),
+      where('status', '==', 'pending')
+    );
+    const unsubAppt = onSnapshot(qAppt, (snapshot) => {
+      const list = snapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      }));
+      setPendingAppointments(list);
+    }, (err) => {
+      console.error("Error fetching pending appointments:", err);
+    });
+
+    return () => {
+      unsubNotif();
+      unsubAppt();
+    };
+  }, []);
+
+  const handleAcceptRequest = async (id: string, date: string, time: string) => {
+    if (!db || !auth?.currentUser) return;
+    try {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await updateDoc(doc(db, 'appointments', id), { status: 'scheduled' });
+      Alert.alert('Request Accepted', 'Appointment has been scheduled successfully.');
+      
+      await addDoc(collection(db, 'notifications'), {
+        counselorUid: auth.currentUser.uid,
+        counselorName: counselorName,
+        type: 'booking',
+        title: 'Appointment Confirmed',
+        message: `You confirmed the appointment for ${date} at ${time}.`,
+        createdAt: Date.now(),
+        read: false,
+      });
+    } catch (err) {
+      console.error("Error accepting request:", err);
+      Alert.alert('Error', 'Could not accept the request. Please try again.');
+    }
+  };
+
+  const handleDeclineRequest = async (id: string, date: string, time: string) => {
+    if (!db || !auth?.currentUser) return;
+    try {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await updateDoc(doc(db, 'appointments', id), { status: 'declined' });
+      Alert.alert('Request Declined', 'Appointment request has been declined.');
+    } catch (err) {
+      console.error("Error declining request:", err);
+      Alert.alert('Error', 'Could not decline the request. Please try again.');
+    }
+  };
 
   const sendReminder = (label: string) => {
     setIsReminderSent(true);
@@ -114,16 +202,23 @@ export default function CounselorDashboardScreen() {
     setIsAccountMenuVisible(true);
   };
 
-  const counselorNotifications = useMemo(
-    () => notifications.filter((notification) => notification.counselorName === counselorName),
-    [counselorName, notifications]
-  );
+  const counselorNotifications = notifications;
   const unreadNotificationCount = counselorNotifications.filter((notification) => !notification.read).length;
 
-  const handleOpenNotifications = () => {
+  const handleOpenNotifications = async () => {
     void Haptics.selectionAsync();
-    markCounselorNotificationsAsRead(counselorName);
     setIsNotificationsVisible(true);
+    if (!db) return;
+    
+    // Mark notifications as read in Firestore
+    const unread = notifications.filter((n) => !n.read);
+    for (const n of unread) {
+      try {
+        await updateDoc(doc(db, 'notifications', n.id), { read: true });
+      } catch (err) {
+        console.error("Error updating notification status in Firestore:", err);
+      }
+    }
   };
 
   return (
@@ -156,57 +251,73 @@ export default function CounselorDashboardScreen() {
               <View style={styles.summaryIcon}>
                 <Ionicons name="people-outline" size={22} color="#2F88E8" />
               </View>
-              <Text style={styles.summaryValue}>24</Text>
-              <Text style={styles.summaryLabel}>Total Patient</Text>
+              <Text style={styles.summaryValue}>{uniquePatientsCount}</Text>
+              <Text style={styles.summaryLabel}>Total Patients</Text>
             </View>
 
             <View style={styles.summaryCard}>
               <View style={styles.summaryIcon}>
                 <Feather name="clock" size={20} color="#2F88E8" />
               </View>
-              <Text style={styles.summaryValue}>6.5</Text>
+              <Text style={styles.summaryValue}>{hoursToday}</Text>
               <Text style={styles.summaryLabel}>Hours Today</Text>
             </View>
           </View>
 
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>PENDING REQUEST</Text>
-            <Text style={styles.sectionBadge}>1 New</Text>
+            <Text style={styles.sectionTitle}>PENDING REQUESTS</Text>
+            {pendingAppointments.length > 0 ? (
+              <Text style={styles.sectionBadge}>{pendingAppointments.length} New</Text>
+            ) : null}
           </View>
 
-          <View style={styles.requestCard}>
-            <View style={styles.requestTop}>
-              <Image
-                source={{ uri: 'https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=600&q=80' }}
-                style={styles.requestAvatar}
-              />
-              <View style={styles.requestMeta}>
-                <Text style={styles.requestName}>Deepika Gunawardana</Text>
-                <Text style={styles.requestTime}>Requested for Today, 2:00 PM</Text>
+          {pendingAppointments.length === 0 ? (
+            <Text style={styles.noRequestsText}>No pending requests</Text>
+          ) : (
+            pendingAppointments.map((appt) => (
+              <View key={appt.id} style={styles.requestCard}>
+                <View style={styles.requestTop}>
+                  <Image
+                    source={{ uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80' }}
+                    style={styles.requestAvatar}
+                  />
+                  <View style={styles.requestMeta}>
+                    <PatientName uid={appt.patientId || ''} style={styles.requestName} />
+                    <Text style={styles.requestTime}>Requested for {appt.date}, {appt.time}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.noteBox}>
+                  <Text style={styles.noteTitle}>Patient Note:</Text>
+                  <Text style={styles.noteText}>&quot;{appt.note || 'Seeking support'}&quot;</Text>
+                </View>
+
+                <View style={styles.tagsRow}>
+                  <Text style={styles.tagPill}>General Counseling</Text>
+                  <Text style={styles.timePill}>45 mins</Text>
+                </View>
+
+                <View style={styles.requestActions}>
+                  <TouchableOpacity 
+                    style={styles.acceptButton} 
+                    activeOpacity={0.88}
+                    onPress={() => void handleAcceptRequest(appt.id, appt.date, appt.time)}
+                  >
+                    <Feather name="check" size={20} color="#FFFFFF" />
+                    <Text style={styles.acceptText}>Accept</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.declineButton} 
+                    activeOpacity={0.88}
+                    onPress={() => void handleDeclineRequest(appt.id, appt.date, appt.time)}
+                  >
+                    <Feather name="x" size={20} color="#F24D4D" />
+                    <Text style={styles.declineText}>Decline</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
-
-            <View style={styles.noteBox}>
-              <Text style={styles.noteTitle}>Patient Note:</Text>
-              <Text style={styles.noteText}>&quot;Feeling overwhelmed with work recently.&quot;</Text>
-            </View>
-
-            <View style={styles.tagsRow}>
-              <Text style={styles.tagPill}>Anxiety Management</Text>
-              <Text style={styles.timePill}>45 mins</Text>
-            </View>
-
-            <View style={styles.requestActions}>
-              <TouchableOpacity style={styles.acceptButton} activeOpacity={0.88}>
-                <Feather name="check" size={20} color="#FFFFFF" />
-                <Text style={styles.acceptText}>Accept</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.declineButton} activeOpacity={0.88}>
-                <Feather name="x" size={20} color="#F24D4D" />
-                <Text style={styles.declineText}>Decline</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+            ))
+          )}
 
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>UPCOMING SESSIONS</Text>
@@ -502,6 +613,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     paddingHorizontal: 12,
     paddingVertical: 4,
+  },
+  noRequestsText: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: '#6B7484',
+    textAlign: 'center',
+    paddingVertical: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#DEE4EC',
+    fontWeight: '500',
   },
   requestCard: {
     borderRadius: 14,

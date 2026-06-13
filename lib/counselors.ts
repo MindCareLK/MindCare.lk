@@ -28,6 +28,7 @@ export type CounselorProfile = {
   bio: string;
   role: "counselor";
   profileCompleted: boolean;
+  schedules?: Record<string, any>;
   createdAt?: unknown;
   updatedAt?: unknown;
 };

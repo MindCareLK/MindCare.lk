@@ -1,12 +1,15 @@
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState, useEffect } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Image, Alert } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Image, Alert, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { addCounselorNotification } from '@/components/notification-store';
 import { addBookedSession } from '@/components/session-store';
 import { useAuthContext } from '@/components/AuthContext';
 import AuthRequiredModal from '@/components/AuthRequiredModal';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { getCounselorProfile } from '@/lib/counselors';
 
 type ConsultationMode = 'video' | 'voice';
 
@@ -77,6 +80,7 @@ export default function ScheduleSessionPage() {
   const { userRole } = useAuthContext();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const params = useLocalSearchParams<{
+    uid?: string;
     name?: string;
     title?: string;
     years?: string;
@@ -98,6 +102,9 @@ export default function ScheduleSessionPage() {
   }, [selectedDate]);
   const [selectedSlot, setSelectedSlot] = useState('10:30 AM');
   const [selectedMode, setSelectedMode] = useState<ConsultationMode>('video');
+  const [counselorSchedules, setCounselorSchedules] = useState<any>(null);
+  const [bookedSlots, setBookedSlots] = useState<string[]>([]);
+  const [patientNote, setPatientNote] = useState('');
 
   const isSlotInPast = (slotStr: string) => {
     const now = new Date();
@@ -130,6 +137,60 @@ export default function ScheduleSessionPage() {
     return slotTime < now;
   };
 
+  // Fetch counselor profile schedules
+  useEffect(() => {
+    if (!params.uid) return;
+    
+    getCounselorProfile(params.uid).then(profile => {
+      if (profile && profile.schedules) {
+        setCounselorSchedules(profile.schedules);
+      }
+    }).catch(err => console.error("Error fetching counselor profile schedules:", err));
+  }, [params.uid]);
+
+  // Fetch booked slots on selectedDate
+  useEffect(() => {
+    if (!params.uid || !selectedDate || !db) return;
+    
+    const fetchBookedSlots = async () => {
+      try {
+        const q = query(
+          collection(db!, 'appointments'),
+          where('counselorUid', '==', params.uid),
+          where('date', '==', formatSummaryDate(selectedDateObject)),
+          where('status', 'in', ['scheduled', 'pending'])
+        );
+        const snapshot = await getDocs(q);
+        const slots = snapshot.docs.map(doc => doc.data().time);
+        setBookedSlots(slots);
+      } catch (err) {
+        console.error("Error fetching booked slots:", err);
+      }
+    };
+    
+    void fetchBookedSlots();
+  }, [params.uid, selectedDate, selectedDateObject]);
+
+  // Compute dynamic slots list
+  const activeSlots = useMemo(() => {
+    const dayTemplate = counselorSchedules?.[selectedDate];
+    if (dayTemplate) {
+      const slots: string[] = [];
+      const periods = ['morning', 'afternoon', 'evening'] as const;
+      for (const p of periods) {
+        if (dayTemplate[p]) {
+          for (const slot of dayTemplate[p]) {
+            if (slot.isAvailable) {
+              slots.push(slot.startTime);
+            }
+          }
+        }
+      }
+      return slots;
+    }
+    return SLOT_LABELS;
+  }, [counselorSchedules, selectedDate]);
+
   useEffect(() => {
     const now = new Date();
     const isToday =
@@ -137,27 +198,32 @@ export default function ScheduleSessionPage() {
       selectedDateObject.getMonth() === now.getMonth() &&
       selectedDateObject.getDate() === now.getDate();
 
-    if (isToday) {
-      const getSlotDateTime = (slotStr: string) => {
-        const result = new Date(selectedDateObject);
-        const match = slotStr.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
-        if (!match) return result;
-        let hours = parseInt(match[1], 10);
-        const minutes = parseInt(match[2], 10);
-        const ampm = match[3].toUpperCase();
-        if (ampm === 'PM' && hours < 12) hours += 12;
-        else if (ampm === 'AM' && hours === 12) hours = 0;
-        result.setHours(hours, minutes, 0, 0);
-        return result;
-      };
+    const getSlotDateTime = (slotStr: string) => {
+      const result = new Date(selectedDateObject);
+      const match = slotStr.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+      if (!match) return result;
+      let hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      const ampm = match[3].toUpperCase();
+      if (ampm === 'PM' && hours < 12) hours += 12;
+      else if (ampm === 'AM' && hours === 12) hours = 0;
+      result.setHours(hours, minutes, 0, 0);
+      return result;
+    };
 
-      const isCurrentSlotPast = getSlotDateTime(selectedSlot) < now;
-      if (isCurrentSlotPast) {
-        const firstFutureSlot = SLOT_LABELS.find((slot) => getSlotDateTime(slot) >= now);
-        setSelectedSlot(firstFutureSlot || '');
-      }
+    const isCurrentSlotBooked = bookedSlots.includes(selectedSlot);
+    const isCurrentSlotActive = activeSlots.includes(selectedSlot);
+    const isCurrentSlotPast = isToday && getSlotDateTime(selectedSlot) < now;
+    
+    if (isCurrentSlotBooked || !isCurrentSlotActive || isCurrentSlotPast) {
+      const firstAvailable = activeSlots.find((slot) => {
+        const booked = bookedSlots.includes(slot);
+        const past = isToday && getSlotDateTime(slot) < now;
+        return !booked && !past;
+      });
+      setSelectedSlot(firstAvailable || '');
     }
-  }, [selectedDate, selectedDateObject]);
+  }, [selectedDate, selectedDateObject, activeSlots, bookedSlots]);
 
   const tagsParam = Array.isArray(params.tags) ? params.tags[0] : params.tags;
   const counselorTags = (tagsParam ? tagsParam.split(',') : ['Anxiety', 'CBT']).filter(Boolean).slice(0, 2);
@@ -235,16 +301,10 @@ export default function ScheduleSessionPage() {
       specialty: counselorTitle,
       date: summaryDate,
       time: selectedSlot,
-      status: 'Upcoming',
+      status: 'Pending',
       actions: true,
-    });
-
-    addCounselorNotification({
-      counselorName,
-      type: 'booking',
-      title: 'New session booked',
-      message: `A patient booked a session for ${summaryDate} at ${selectedSlot}.`,
-    });
+      note: patientNote,
+    } as any);
 
     router.replace('/(main-tabs)/profile');
   };
@@ -387,29 +447,37 @@ export default function ScheduleSessionPage() {
             </View>
 
             <View style={styles.slotGrid}>
-              {SLOT_LABELS.map((slot, index) => {
-                const isActive = slot === selectedSlot;
-                const isPast = isSlotInPast(slot);
+              {activeSlots.length === 0 ? (
+                <Text style={styles.noSlotsText}>No availability slots defined for this day</Text>
+              ) : (
+                activeSlots.map((slot, index) => {
+                  const isActive = slot === selectedSlot;
+                  const isPast = isSlotInPast(slot);
+                  const isBooked = bookedSlots.includes(slot);
+                  const isDisabled = isPast || isBooked;
 
-                return (
-                  <TouchableOpacity
-                    key={`${slot}-${index}`}
-                    style={[
-                      styles.slotButton,
-                      isActive && styles.slotButtonActive,
-                      isPast && styles.slotButtonDisabled,
-                    ]}
-                    activeOpacity={0.88}
-                    disabled={isPast}
-                    onPress={() => setSelectedSlot(slot)}>
-                    <Text style={[
-                      styles.slotText,
-                      isActive && styles.slotTextActive,
-                      isPast && styles.slotTextDisabled,
-                    ]}>{slot}</Text>
-                  </TouchableOpacity>
-                );
-              })}
+                  return (
+                    <TouchableOpacity
+                      key={`${slot}-${index}`}
+                      style={[
+                        styles.slotButton,
+                        isActive && styles.slotButtonActive,
+                        isDisabled && styles.slotButtonDisabled,
+                      ]}
+                      activeOpacity={0.88}
+                      disabled={isDisabled}
+                      onPress={() => setSelectedSlot(slot)}>
+                      <Text style={[
+                        styles.slotText,
+                        isActive && styles.slotTextActive,
+                        isDisabled && styles.slotTextDisabled,
+                      ]}>
+                        {slot} {isBooked ? '(Booked)' : ''}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
             </View>
           </View>
 
@@ -438,6 +506,19 @@ export default function ScheduleSessionPage() {
                 <Text style={styles.modeText}>For better privacy & low bandwidth</Text>
               </TouchableOpacity>
             </View>
+          </View>
+
+          <View style={styles.sectionWrap}>
+            <Text style={styles.sectionLabel}>REASON FOR CONSULTATION (OPTIONAL)</Text>
+            <TextInput
+              style={styles.noteInput}
+              placeholder="e.g. Feeling overwhelmed with work recently..."
+              placeholderTextColor="#A0AAB7"
+              value={patientNote}
+              onChangeText={setPatientNote}
+              multiline
+              maxLength={200}
+            />
           </View>
 
           <View style={styles.summaryCard}>
@@ -888,5 +969,26 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     color: '#8E969F',
     fontWeight: '500',
+  },
+  noteInput: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DEE4EC',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 14,
+    color: '#202A36',
+    minHeight: 80,
+    textAlignVertical: 'top',
+    fontFamily: 'Inter',
+    marginTop: 8,
+  },
+  noSlotsText: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: '#7E8A98',
+    paddingVertical: 12,
+    textAlign: 'center',
+    width: '100%',
   },
 });

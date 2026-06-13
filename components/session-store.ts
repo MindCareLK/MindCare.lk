@@ -12,7 +12,7 @@ export type BookedSession = {
   specialty: string;
   date: string;
   time: string;
-  status: 'Upcoming' | 'Completed';
+  status: 'Upcoming' | 'Completed' | 'Pending';
   actions?: boolean;
   patientId?: string;
 };
@@ -59,8 +59,8 @@ export function useBookedSessions() {
             specialty: 'Counselor', // Mocked as the DB schema does not store specialty
             date: data.date,
             time: data.time,
-            status: data.status === 'scheduled' ? 'Upcoming' : 'Completed',
-            actions: data.status === 'scheduled',
+            status: data.status === 'scheduled' ? 'Upcoming' : data.status === 'pending' ? 'Pending' : 'Completed',
+            actions: data.status === 'scheduled' || data.status === 'pending',
           };
         });
         
@@ -103,8 +103,8 @@ export function useCounselorSessions(counselorName: string) {
             specialty: 'Counselor',
             date: data.date,
             time: data.time,
-            status: data.status === 'scheduled' ? 'Upcoming' : 'Completed',
-            actions: data.status === 'scheduled',
+            status: data.status === 'scheduled' ? 'Upcoming' : data.status === 'pending' ? 'Pending' : 'Completed',
+            actions: data.status === 'scheduled' || data.status === 'pending',
             patientId: data.patientId,
           };
         });
@@ -147,15 +147,29 @@ export async function addBookedSession(session: Omit<BookedSession, 'id'> | Book
     console.log('[addBookedSession] Resolved counselorUid:', counselorUid);
 
     console.log('[addBookedSession] Creating appointment document for patient:', user.uid);
+    const note = (session as any).note || 'Seeking mental health guidance';
     await addDoc(collection(db, 'appointments'), {
       patientId: user.uid,
       counselorId: session.doctor,
       counselorUid: counselorUid,
       date: session.date,
       time: session.time,
-      status: session.status === 'Upcoming' ? 'scheduled' : 'completed',
+      status: 'pending',
+      note: note,
     });
     console.log('[addBookedSession] Appointment document created successfully.');
+
+    if (counselorUid) {
+      await addDoc(collection(db, 'notifications'), {
+        counselorUid: counselorUid,
+        counselorName: session.doctor,
+        type: 'booking',
+        title: 'New session request',
+        message: `A patient requested a session for ${session.date} at ${session.time}.`,
+        createdAt: Date.now(),
+        read: false,
+      });
+    }
   } catch (error) {
     console.error('Error adding appointment:', error);
   }
