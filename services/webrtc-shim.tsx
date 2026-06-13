@@ -84,16 +84,19 @@ if (Platform.OS === 'web') {
     }
   }
 
-  Exported_RTCView = ({ streamURL, style, mirror, objectFit, ...props }: any) => {
+  Exported_RTCView = ({ stream, streamURL, style, mirror, objectFit, ...props }: any) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const flatStyle = StyleSheet.flatten(style);
 
     useEffect(() => {
-      const stream = streamMap.get(streamURL);
-      if (videoRef.current && stream) {
-        videoRef.current.srcObject = stream;
+      let activeStream = stream;
+      if (!activeStream && streamURL) {
+        activeStream = streamMap.get(streamURL);
       }
-    }, [streamURL]);
+      if (videoRef.current && activeStream) {
+        videoRef.current.srcObject = activeStream;
+      }
+    }, [stream, streamURL]);
 
     return (
       <video
@@ -185,7 +188,7 @@ if (Platform.OS === 'web') {
     }
   };
 
-  Exported_RTCView = ({ streamURL, style, mirror, objectFit, ...props }: any) => {
+  Exported_RTCView = ({ stream, streamURL, style, mirror, objectFit, ...props }: any) => {
     const flatStyle = StyleSheet.flatten(style);
     return (
       <View style={[{

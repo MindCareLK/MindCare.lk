@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/components/AuthContext';
 import { addCounselorNotification } from '@/components/notification-store';
 import { RescheduleModal, type RescheduleSession } from '@/components/RescheduleModal';
+import { CancelSessionModal } from '@/components/CancelSessionModal';
 import { isSessionNear, removeBookedSession, updateBookedSession, useBookedSessions } from '@/components/session-store';
 import { getMemberProfile } from '@/lib/members';
 import { signOut } from 'firebase/auth';
@@ -146,6 +147,7 @@ export default function ProfilePage() {
   const [draftProfile, setDraftProfile] = useState(memberProfile);
   const [isEditing, setIsEditing] = useState(false);
   const [rescheduleSession, setRescheduleSession] = useState<SessionCard | null>(null);
+  const [sessionToCancel, setSessionToCancel] = useState<SessionCard | null>(null);
   const [selectedRescheduleDate, setSelectedRescheduleDate] = useState('2026-03-11');
   const [selectedTimeSlot, setSelectedTimeSlot] = useState('10:00 AM');
   const scrollViewRef = useRef<ScrollView | null>(null);
@@ -379,8 +381,17 @@ export default function ProfilePage() {
       return;
     }
 
-    removeBookedSession(rescheduleSession.id);
+    setSessionToCancel(rescheduleSession);
     setRescheduleSession(null);
+  };
+
+  const handleConfirmCancelSession = () => {
+    if (!sessionToCancel) {
+      return;
+    }
+
+    removeBookedSession(sessionToCancel.id);
+    setSessionToCancel(null);
   };
 
 
@@ -648,6 +659,13 @@ export default function ProfilePage() {
           onClose={handleCloseReschedule}
           onConfirm={handleConfirmReschedule}
           onCancelSession={handleCancelSession}
+        />
+
+        <CancelSessionModal
+          visible={Boolean(sessionToCancel)}
+          session={sessionToCancel}
+          onClose={() => setSessionToCancel(null)}
+          onConfirm={handleConfirmCancelSession}
         />
       </View>
     </SafeAreaView>

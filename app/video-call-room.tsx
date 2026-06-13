@@ -1,14 +1,14 @@
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Image,
-  ImageBackground,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -47,6 +47,8 @@ export default function VideoCallRoomScreen() {
     remoteStream,
     micEnabled,
     cameraEnabled,
+    connectionState,
+    mediaError,
     createCall,
     joinCall,
     toggleMic,
@@ -79,12 +81,13 @@ export default function VideoCallRoomScreen() {
 
   useEffect(() => {
     if (roomId && role) {
-      if (role === 'caller') {
+      if (role === 'caller' || role === 'patient') {
         createCall(roomId as string);
-      } else if (role === 'callee') {
+      } else if (role === 'callee' || role === 'counselor') {
         joinCall(roomId as string);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId, role]);
 
   const handleEndCall = () => {
@@ -94,13 +97,17 @@ export default function VideoCallRoomScreen() {
 
     endCall();
 
-    router.replace({
-      pathname: '/(counselor-tabs)/overview',
-      params: {
-        name: counselorName,
-        specialty,
-      },
-    });
+    if (role === 'counselor' || role === 'callee') {
+      router.replace({
+        pathname: '/(counselor-tabs)/overview',
+        params: {
+          name: counselorName,
+          specialty,
+        },
+      });
+    } else {
+      router.replace('/(main-tabs)/profile');
+    }
   };
 
   return (
@@ -114,7 +121,7 @@ export default function VideoCallRoomScreen() {
           {remoteStream ? (
             <RTCView
               streamURL={remoteStream.toURL()}
-              style={[StyleSheet.absoluteFill, styles.callBackgroundImage]}
+              style={StyleSheet.absoluteFill}
               objectFit="cover"
             />
           ) : (
@@ -167,10 +174,20 @@ export default function VideoCallRoomScreen() {
             >
               Role: {role}
             </Text>
+
+            <Text
+              style={{
+                color: '#FFF',
+                fontSize: 12,
+                fontWeight: 'bold',
+                marginTop: 4,
+              }}
+            >
+              Status: {connectionState.toUpperCase()}
+            </Text>
           </View>
           <View style={styles.remotePreview}>
-            {localStream ? (
-
+            {localStream && localStream.getVideoTracks && localStream.getVideoTracks().length > 0 ? (
               <RTCView
                 streamURL={localStream.toURL()}
                 style={{
@@ -179,6 +196,7 @@ export default function VideoCallRoomScreen() {
                 }}
                 mirror={true}
                 objectFit="cover"
+                zOrder={1}
               />
             ) : (
               <View
@@ -189,7 +207,7 @@ export default function VideoCallRoomScreen() {
                 <Text
                   style={styles.loadingText}
                 >
-                  Starting Camera...
+                  {mediaError ? mediaError : 'Starting Camera...'}
                 </Text>
               </View>
             )}
@@ -197,6 +215,13 @@ export default function VideoCallRoomScreen() {
 
           <TouchableOpacity
             style={styles.audioOnlyButton}
+            activeOpacity={0.8}
+            onPress={() => {
+              if (cameraEnabled) {
+                toggleCamera();
+              }
+              Alert.alert('Audio-Only Mode', 'Your camera feed has been disabled.');
+            }}
           >
             <Feather
               name="headphones"
@@ -206,6 +231,7 @@ export default function VideoCallRoomScreen() {
 
             <Text
               style={styles.audioOnlyText}
+              numberOfLines={1}
             >
               Switch to Audio-Only
             </Text>
@@ -214,13 +240,12 @@ export default function VideoCallRoomScreen() {
           <View style={styles.controlDock}>
             <TouchableOpacity
               style={styles.controlItem}
+              onPress={toggleMic}
             >
               <Feather
                 name={micEnabled ? 'mic' : 'mic-off'}
                 size={18}
                 color="#DCE4F2"
-
-                onPress={toggleMic}
               />
               <Text
                 style={styles.controlLabel}
@@ -231,13 +256,12 @@ export default function VideoCallRoomScreen() {
 
             <TouchableOpacity
               style={styles.controlItem}
-              onPress={toggleMic}
+              onPress={toggleCamera}
             >
               <Feather
                 name={cameraEnabled ? 'video' : 'video-off'}
                 size={18}
                 color="#DCE4F2"
-                onPress={toggleCamera}
               />
               <Text
                 style={styles.controlLabel}
@@ -268,6 +292,12 @@ export default function VideoCallRoomScreen() {
 
             <TouchableOpacity
               style={styles.controlItem}
+              onPress={() => {
+                Alert.alert(
+                  'Connection Quality',
+                  `Room: ${roomId}\nRole: ${role}\nSignal status: Good (TURN configuration active)\nStatus: ${connectionState.toUpperCase()}`
+                );
+              }}
             >
               <Ionicons
                 name="stats-chart-outline"
@@ -283,6 +313,12 @@ export default function VideoCallRoomScreen() {
 
             <TouchableOpacity
               style={styles.controlItem}
+              onPress={() => {
+                Alert.alert(
+                  'Options',
+                  '• Virtual background (Coming soon)\n• Screen sharing (Coming soon)\n• Call stats'
+                );
+              }}
             >
               <Feather
                 name="more-horizontal"
@@ -447,6 +483,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: '#F1F6FF',
     fontWeight: '500',
+    flexShrink: 0,
   },
 
   controlDock: {
