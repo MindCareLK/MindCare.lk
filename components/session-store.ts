@@ -17,10 +17,59 @@ export type BookedSession = {
   patientId?: string;
 };
 
+export function parseDateTime(dateStr: string, timeStr: string): Date | null {
+  try {
+    if (!dateStr || !timeStr) return null;
+    
+    // Split dateStr: expected "Month day, year" (e.g. "June 13, 2026")
+    const dateParts = dateStr.trim().split(/[\s,]+/);
+    if (dateParts.length < 3) return null;
+
+    const months = [
+      "january", "february", "march", "april", "may", "june",
+      "july", "august", "september", "october", "november", "december"
+    ];
+    const shortMonths = [
+      "jan", "feb", "mar", "apr", "may", "jun",
+      "jul", "aug", "sep", "oct", "nov", "dec"
+    ];
+
+    let monthVal = months.indexOf(dateParts[0].toLowerCase());
+    if (monthVal === -1) {
+      monthVal = shortMonths.indexOf(dateParts[0].toLowerCase().slice(0, 3));
+    }
+    if (monthVal === -1) return null;
+
+    const dayVal = parseInt(dateParts[1], 10);
+    const yearVal = parseInt(dateParts[2], 10);
+    if (isNaN(dayVal) || isNaN(yearVal)) return null;
+
+    // Match timeStr: expected "hh:mm AM/PM" (e.g. "6:30 PM" or "06:30 PM")
+    const match = timeStr.trim().match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+    if (!match) return null;
+
+    let hours = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    const ampm = match[3].toUpperCase();
+
+    if (isNaN(hours) || isNaN(minutes)) return null;
+
+    if (ampm === "PM" && hours < 12) {
+      hours += 12;
+    } else if (ampm === "AM" && hours === 12) {
+      hours = 0;
+    }
+
+    return new Date(yearVal, monthVal, dayVal, hours, minutes, 0, 0);
+  } catch {
+    return null;
+  }
+}
+
 export function isSessionNear(dateStr: string, timeStr: string): boolean {
   try {
-    const sessionDate = new Date(`${dateStr} ${timeStr}`);
-    if (isNaN(sessionDate.getTime())) return false;
+    const sessionDate = parseDateTime(dateStr, timeStr);
+    if (!sessionDate) return false;
     
     const now = new Date();
     const diffInMs = sessionDate.getTime() - now.getTime();
@@ -28,7 +77,21 @@ export function isSessionNear(dateStr: string, timeStr: string): boolean {
 
     // Near session time: 15 minutes before, until 60 minutes after the start time
     return diffInMinutes <= 15 && diffInMinutes >= -60;
-  } catch (e) {
+  } catch {
+    return false;
+  }
+}
+
+export function isSessionPast(dateStr: string, timeStr: string): boolean {
+  try {
+    const sessionDate = parseDateTime(dateStr, timeStr);
+    if (!sessionDate) return false;
+    
+    const now = new Date();
+    // A session is past if current time is greater than session start time + 60 minutes
+    const sessionEndTime = new Date(sessionDate.getTime() + 60 * 60 * 1000);
+    return now > sessionEndTime;
+  } catch {
     return false;
   }
 }
@@ -39,7 +102,9 @@ export function useBookedSessions() {
 
   useEffect(() => {
     if (!currentUser || !db) {
-      setSessions([]);
+      setTimeout(() => {
+        setSessions([]);
+      }, 0);
       return;
     }
 
@@ -53,14 +118,21 @@ export function useBookedSessions() {
       (snapshot) => {
         const fetchedSessions: BookedSession[] = snapshot.docs.map((docSnap) => {
           const data = docSnap.data();
+          const isPast = isSessionPast(data.date, data.time);
+          
+          let status: 'Upcoming' | 'Completed' | 'Pending' = 'Completed';
+          if (!isPast) {
+            status = data.status === 'scheduled' ? 'Upcoming' : data.status === 'pending' ? 'Pending' : 'Completed';
+          }
+          
           return {
             id: docSnap.id,
             doctor: data.counselorId || 'Unknown Counselor',
             specialty: 'Counselor', // Mocked as the DB schema does not store specialty
             date: data.date,
             time: data.time,
-            status: data.status === 'scheduled' ? 'Upcoming' : data.status === 'pending' ? 'Pending' : 'Completed',
-            actions: data.status === 'scheduled' || data.status === 'pending',
+            status: status,
+            actions: !isPast && (data.status === 'scheduled' || data.status === 'pending'),
           };
         });
         
@@ -79,17 +151,20 @@ export function useBookedSessions() {
 }
 
 export function useCounselorSessions(counselorName: string) {
+  const { currentUser } = useAuthContext();
   const [sessions, setSessions] = useState<BookedSession[]>([]);
 
   useEffect(() => {
-    if (!counselorName || !db || !auth?.currentUser) {
-      setSessions([]);
+    if (!counselorName || !db || !currentUser) {
+      setTimeout(() => {
+        setSessions([]);
+      }, 0);
       return;
     }
 
     const q = query(
       collection(db, 'appointments'),
-      where('counselorUid', '==', auth?.currentUser?.uid)
+      where('counselorUid', '==', currentUser.uid)
     );
 
     const unsubscribe = onSnapshot(
@@ -97,14 +172,21 @@ export function useCounselorSessions(counselorName: string) {
       (snapshot) => {
         const fetchedSessions: BookedSession[] = snapshot.docs.map((docSnap) => {
           const data = docSnap.data();
+          const isPast = isSessionPast(data.date, data.time);
+          
+          let status: 'Upcoming' | 'Completed' | 'Pending' = 'Completed';
+          if (!isPast) {
+            status = data.status === 'scheduled' ? 'Upcoming' : data.status === 'pending' ? 'Pending' : 'Completed';
+          }
+          
           return {
             id: docSnap.id,
             doctor: data.counselorId || 'Unknown Counselor',
             specialty: 'Counselor',
             date: data.date,
             time: data.time,
-            status: data.status === 'scheduled' ? 'Upcoming' : data.status === 'pending' ? 'Pending' : 'Completed',
-            actions: data.status === 'scheduled' || data.status === 'pending',
+            status: status,
+            actions: !isPast && (data.status === 'scheduled' || data.status === 'pending'),
             patientId: data.patientId,
           };
         });
@@ -117,12 +199,12 @@ export function useCounselorSessions(counselorName: string) {
     );
 
     return () => unsubscribe();
-  }, [counselorName, auth?.currentUser?.uid]);
+  }, [counselorName, currentUser]);
 
   return sessions;
 }
 
-export async function addBookedSession(session: Omit<BookedSession, 'id'> | BookedSession) {
+export async function addBookedSession(session: (Omit<BookedSession, 'id'> | BookedSession) & { counselorUid?: string }) {
   const user = auth?.currentUser;
   if (!user || !db) {
     Alert.alert(
@@ -137,12 +219,14 @@ export async function addBookedSession(session: Omit<BookedSession, 'id'> | Book
   }
 
   try {
-    let counselorUid = '';
-    console.log('[addBookedSession] Querying counselor profile for doctor:', session.doctor);
-    const counselorQ = query(collection(db, 'counselors'), where('displayName', '==', session.doctor));
-    const counselorSnap = await getDocs(counselorQ);
-    if (!counselorSnap.empty) {
-      counselorUid = counselorSnap.docs[0].id;
+    let counselorUid = session.counselorUid || '';
+    if (!counselorUid) {
+      console.log('[addBookedSession] Querying counselor profile for doctor:', session.doctor);
+      const counselorQ = query(collection(db, 'counselors'), where('displayName', '==', session.doctor));
+      const counselorSnap = await getDocs(counselorQ);
+      if (!counselorSnap.empty) {
+        counselorUid = counselorSnap.docs[0].id;
+      }
     }
     console.log('[addBookedSession] Resolved counselorUid:', counselorUid);
 

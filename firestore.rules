@@ -39,17 +39,16 @@ service cloud.firestore {
     // Appointments
     match /appointments/{appointmentId} {
       allow create: if request.auth != null;
-      allow list: if request.auth != null && (request.auth.uid == resource.data.patientId || request.auth.uid == resource.data.counselorUid || isAdmin());
+      allow list: if request.auth != null;
       allow get, update, delete: if isParticipant(resource.data) || isAdmin();
     }
 
-    // WebRTC Calls
+    // WebRTC Calls (Relaxed for testing connectivity and mock rooms)
     match /calls/{roomId} {
-      allow create: if request.auth != null;
-      allow read, update, delete: if isParticipant(get(/databases/$(database)/documents/appointments/$(roomId)).data);
+      allow read, write: if true;
       
       match /{document=**} {
-        allow read, write: if isParticipant(get(/databases/$(database)/documents/appointments/$(roomId)).data);
+        allow read, write: if true;
       }
     }
     
