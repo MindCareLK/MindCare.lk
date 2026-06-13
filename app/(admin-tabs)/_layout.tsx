@@ -3,6 +3,7 @@ import { Tabs, router, usePathname } from 'expo-router';
 import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, Platform, StatusBar } from 'react-native';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const SIDEBAR_ITEMS = [
   { name: 'Dashboard', icon: 'grid', route: '/(admin-tabs)/dashboard' },
@@ -16,6 +17,7 @@ export default function AdminTabsLayout() {
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
   const pathname = usePathname();
+  const insets = useSafeAreaInsets();
 
   const handleLogout = async () => {
     try {
@@ -95,8 +97,9 @@ export default function AdminTabsLayout() {
               : {
                   backgroundColor: '#FFFFFF',
                   borderTopColor: '#E2E8F0',
-                  height: 60,
-                  paddingBottom: 8,
+                  height: 56 + insets.bottom,
+                  paddingTop: 8,
+                  paddingBottom: insets.bottom > 0 ? insets.bottom - 4 : 8,
                 },
             tabBarActiveTintColor: '#3B82F6',
             tabBarInactiveTintColor: '#64748B',
