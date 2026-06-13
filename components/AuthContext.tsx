@@ -55,35 +55,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       void (async () => {
         try {
           if (db) {
-            // If counselor, do not populate member profile
-            const counselorRef = doc(db, 'counselors', nextUser.uid);
-            const counselorSnap = await getDoc(counselorRef);
-            if (counselorSnap.exists()) {
+            let role: UserRole = null;
+            let attempts = 0;
+            const maxAttempts = 5;
+
+            while (attempts < maxAttempts) {
+              // Check counselor
+              const counselorRef = doc(db, 'counselors', nextUser.uid);
+              const counselorSnap = await getDoc(counselorRef);
+              if (counselorSnap.exists()) {
+                role = 'counselor';
+                break;
+              }
+
+              // Check admin
+              const adminRef = doc(db, 'admins', nextUser.uid);
+              let adminSnap = await getDoc(adminRef);
+
+              const userEmail = nextUser.email?.toLowerCase();
+              if (!adminSnap.exists() && (userEmail === 'admin@gmail.com' || userEmail === 'admin@mindcare.lk')) {
+                try {
+                  await setDoc(adminRef, {
+                    email: userEmail,
+                    role: 'admin',
+                    createdAt: new Date().toISOString(),
+                  });
+                  adminSnap = await getDoc(adminRef);
+                } catch (err) {
+                  console.error("Error auto-creating admin doc in AuthContext:", err);
+                }
+              }
+
+              if (adminSnap.exists()) {
+                role = 'admin';
+                break;
+              }
+
+              // Check member
+              const memberRef = doc(db, 'members', nextUser.uid);
+              const memberSnap = await getDoc(memberRef);
+              if (memberSnap.exists()) {
+                role = 'member';
+                break;
+              }
+
+              // If none exist yet, it might be a new registration in progress.
+              // Wait 500ms and retry to let the sign-up function finish writing to Firestore.
+              attempts++;
+              if (attempts < maxAttempts) {
+                await new Promise((resolve) => setTimeout(resolve, 500));
+              }
+            }
+
+            if (role === 'counselor') {
               setMemberProfile(emptyProfile);
               setUserRole('counselor');
               setIsAuthReady(true);
               return;
             }
 
-            // If admin, do not populate member profile
-            const adminRef = doc(db, 'admins', nextUser.uid);
-            let adminSnap = await getDoc(adminRef);
-
-            const userEmail = nextUser.email?.toLowerCase();
-            if (!adminSnap.exists() && (userEmail === 'admin@gmail.com' || userEmail === 'admin@mindcare.lk')) {
-              try {
-                await setDoc(adminRef, {
-                  email: userEmail,
-                  role: 'admin',
-                  createdAt: new Date().toISOString(),
-                });
-                adminSnap = await getDoc(adminRef);
-              } catch (err) {
-                console.error("Error auto-creating admin doc in AuthContext:", err);
-              }
-            }
-
-            if (adminSnap.exists()) {
+            if (role === 'admin') {
               setMemberProfile(emptyProfile);
               setUserRole('admin');
               setIsAuthReady(true);

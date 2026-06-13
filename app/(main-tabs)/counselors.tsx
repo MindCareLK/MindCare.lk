@@ -8,6 +8,8 @@ import { StatusBar } from 'react-native';
 import { CounselorProfile, listCounselors } from '@/lib/counselors';
 import { useAuthContext } from '@/components/AuthContext';
 import AuthRequiredModal from '@/components/AuthRequiredModal';
+import { db } from '@/lib/firebase';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 
 const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=300&q=80';
 
@@ -18,16 +20,26 @@ export default function CounselorsPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const loadCounselors = async () => {
-      try {
-        const nextCounselors = await listCounselors();
-        setCounselors(nextCounselors);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    if (!db) return;
 
-    void loadCounselors();
+    const q = query(
+      collection(db, 'counselors'),
+      where('role', '==', 'counselor'),
+      where('profileCompleted', '==', true)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs
+        .map((docSnap) => docSnap.data() as CounselorProfile)
+        .filter((item) => item.fullName?.trim() && item.specialty?.trim());
+      setCounselors(list);
+      setIsLoading(false);
+    }, (err) => {
+      console.error("Error listening to counselors list:", err);
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   return (
@@ -80,6 +92,7 @@ export default function CounselorsPage() {
                   router.push({
                     pathname: '/doctor_profile',
                     params: {
+                      uid: item.uid,
                       name: item.displayName || item.fullName,
                       title: item.specialty,
                       years: `${Math.max(item.qualifications.length, 1)} credentials`,
