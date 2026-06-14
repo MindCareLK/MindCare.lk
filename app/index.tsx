@@ -20,16 +20,16 @@ const Splash = () => {
     const timer2 = setTimeout(() => {
       if (currentUser) {
         if (userRole === 'admin') {
-          router.replace('/(admin-tabs)/dashboard');
+          router.replace('./(admin-tabs)/dashboard');
         } else if (userRole === 'counselor') {
-          router.replace('/(counselor-tabs)/overview');
+          router.replace('./(counselor-tabs)/overview');
         } else if (userRole === 'member') {
           router.replace('/(main-tabs)/home');
         } else {
-          router.replace("/role-selection");
+          router.replace("./(tabs)/role-selection");
         }
       } else {
-        router.replace("/role-selection");
+        router.replace("./(tabs)/role-selection");
       }
     }, 4000);
 
