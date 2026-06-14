@@ -60,14 +60,14 @@ graph TD
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Local Development
 
-### 1. Prerequisite Environments
+### Prerequisites
 *   **Node.js:** v18 or later
 *   **Python:** v3.10 or later
 *   **Java JDK & Android Studio/SDK:** (Only needed for local Android APK builds)
 
-### 2. Frontend Setup
+### Frontend Configuration
 1. Clone the repository and install packages:
    ```bash
    npm install
@@ -86,7 +86,7 @@ graph TD
    npx expo start
    ```
 
-### 3. Backend Setup
+### Backend Configuration
 1. Navigate to the backend directory and set up a virtual environment:
    ```bash
    cd backend
@@ -94,7 +94,7 @@ graph TD
    source .venv/bin/activate
    pip install -r requirements.txt
    ```
-2. Set up your `.env` variables:
+2. Configure environment variables in `.env`:
    ```env
    GEMINI_API_KEY=your_gemini_api_key
    ```
@@ -107,20 +107,11 @@ graph TD
 
 ## ☁️ Production Deployment (Hugging Face Spaces)
 
-The backend is configured to run on **Hugging Face Spaces** using **Docker SDK** for free 16GB RAM computing.
-
-1. Create a **Docker Space** with a **Blank** template on Hugging Face.
-2. Under space settings, add the `GEMINI_API_KEY` repository secret.
-3. Push your backend code using **Git LFS** (required as the local PyTorch model weights `best_model_params_sinhala.pt` exceed 100MB):
-   ```bash
-   git lfs install
-   git lfs track "*.pt"
-   git add .gitattributes
-   git add best_model_params_sinhala.pt
-   git commit -m "commit large files"
-   git push origin main
-   ```
-4. The backend is configured to automatically serve requests on port `7860`.
+The backend is containerized via Docker and deployed to **Hugging Face Spaces** using the Docker SDK to handle the high-memory footprint of PyTorch:
+*   **Runtime Environment:** Docker Container (configured to expose port `7860`).
+*   **Hardware Specification:** CPU Basic (16GB RAM, 50GB storage) to prevent Out-of-Memory (OOM) crashes during model load.
+*   **Model Storage:** Large PyTorch weights (`best_model_params_sinhala.pt`) are tracked and uploaded using **Git LFS** (Large File Storage).
+*   **Secrets Management:** The `GEMINI_API_KEY` is loaded from the space's environment variables (configured via Settings > Variables and Secrets).
 
 ---
 
@@ -136,4 +127,4 @@ cd android
 Once the compilation completes, the output file will be saved at:
 `android/app/build/outputs/apk/release/app-release.apk`
 
-Publish the APK on the repository's **GitHub Releases** page using standard version tagging (e.g., `v1.0.1`).
+The compiled APK is ready for manual distribution, internal testing, or uploading to GitHub Releases.
