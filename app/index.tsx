@@ -26,10 +26,10 @@ const Splash = () => {
         } else if (userRole === 'member') {
           router.replace('/(main-tabs)/home');
         } else {
-          router.replace("./(tabs)/role-selection");
+          router.replace("/(tabs)/role-selection");
         }
       } else {
-        router.replace("./(tabs)/role-selection");
+        router.replace("/(tabs)/role-selection");
       }
     }, 4000);
 
