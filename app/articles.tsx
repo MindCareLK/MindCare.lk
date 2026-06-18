@@ -20,18 +20,24 @@ export default function ArticlesScreen() {
     fetchArticles();
   }, []);
 
+  const coverImages = [
+  "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/How Social Media Affects Mental Health.png",
+  "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/The Global State of Mental Health.png",
+  "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Understanding Anxiety in Daily Life.png",
+  "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Understanding Major Depressive Disorder.png",
+];
+
   const fetchArticles = async () => {
     try {
       const data = await getArticles();
 
-      const formatted: ReadCard[] = data.map((item: any) => ({
+      const formatted: ReadCard[] = data.map((item: any, index: number) => ({
         id: item.id,
         category: "BLOG",
         title: item.title.replace(/<[^>]+>/g, ""),
         author: item.author?.displayName || "Admin",
         minutes: "5 min read",
-        image:
-          "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/ArticleBackground.png",
+        image: coverImages[index % coverImages.length],
       }));
 
       setArticles(formatted);
