@@ -79,13 +79,6 @@ const moodOptions: MoodOption[] = [
   },
 ];
 
-const articleMoods: Record<string, string[]> = {
-  "Understanding Anxiety in Daily Life": ["sad", "angry"],
-  "How Social Media Affects Mental Health": ["sad", "calm"],
-  "The Global State of Mental Health": ["calm"],
-  "Understanding Major Depressive Disorder": ["sad"],
-};
-
 const copingCards: CopingCard[] = [
   {
     id: "1",
@@ -162,30 +155,49 @@ export default function HomePage() {
   const fetchArticles = async () => {
     try {
       const data = await getArticles();
+      const articlesArray = Array.isArray(data) ? data : data?.items || [];
+      
+      console.log(`Successfully fetched ${articlesArray.length} articles from Blogger`);
 
 
-    const coverImages = [
-      "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/How Social Media Affects Mental Health.png",
-      "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/The Global State of Mental Health.png",
-      "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Understanding Anxiety in Daily Life.png",
-      "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Understanding Major Depressive Disorder.png",
-    ];
+      const validMoods = ["happy", "calm", "manic", "angry", "sad"];
 
-      // Fix: directly slice the 'data' array since it already contains the items
-      const formatted: ReadCard[] = data?.slice(0, 3).map((item: any, index: number) => ({
-        id: item.id,
-        category: "BLOG",
-        title: item.title.replace(/<[^>]+>/g, ""),
-        author: item.author?.displayName || "Admin",
-        minutes: "5 min read",
-        image: coverImages[index % coverImages.length],
-        moods:
-          articleMoods[item.title.replace(/<[^>]+>/g, "")] || ["calm"],
-      }));
+      const formatted: ReadCard[] = articlesArray.slice(0, 10).map((item: any, index: number) => {
+        
+        const rawLabels = item.labels || [];
+        const lowercaseLabels = rawLabels.map((l: any) => String(l).toLowerCase().trim());
 
-      setReads(formatted || []);
+        const matchedMoods = lowercaseLabels.filter((label: string) => validMoods.includes(label));
+
+        let coverPhoto = "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/ArticleBackground.png"; // Default fallback image
+  
+        if (item.images && item.images.length > 0) {
+          coverPhoto = item.images[0].url;
+        } 
+      
+        else if (item.content) {
+          const imgMatch = item.content.match(/<img[^>]+src="([^">]+)"/);
+          if (imgMatch && imgMatch[1]) {
+            coverPhoto = imgMatch[1];
+          }
+        }
+
+        return {
+          id: item.id,
+          category: "BLOG",
+          title: item.title ? item.title.replace(/<[^>]+>/g, "") : "Untitled",
+          author: item.author?.displayName || "Admin",
+          minutes: "5 min read",
+          image: coverPhoto,
+          moods: matchedMoods.length > 0 ? matchedMoods : validMoods, 
+        };
+      });
+
+      console.log("FORMATTED MOODS FOR FIRST ARTICLE:", formatted[0]?.moods);
+      setReads(formatted);
+      
     } catch (error) {
-      console.log("API Error:", error);
+      console.log("API Error in fetchArticles:", error);
     }
   };
 
