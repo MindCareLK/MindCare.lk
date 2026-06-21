@@ -120,21 +120,6 @@ export default function AdminContentLibraryScreen() {
           author: "Admin"
         });
 
-        const formattedNewArt = {
-          id: newArt.id,
-          title: newArt.title,
-          content: newArt.content,
-          category: newArt.labels[0],
-          author: newArt.author.displayName,
-          date: new Date(newArt.published).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric'
-          }),
-          status: 'Published'
-        };
-
-        setArticles(prev => [formattedNewArt, ...prev]);
         setStats(prev => ({ ...prev, articles: prev.articles + 1 }));
         Alert.alert("Success", "Article published successfully!");
       } else {

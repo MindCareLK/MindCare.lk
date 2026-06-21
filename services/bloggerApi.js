@@ -1,113 +1,44 @@
 import axios from "axios";
-import { db } from "../lib/firebase";
-import { 
-  collection, 
-  getDocs, 
-  getDoc, 
-  doc, 
-  setDoc, 
-  updateDoc, 
-  deleteDoc 
-} from "firebase/firestore";
 
 const API_KEY = process.env.EXPO_PUBLIC_BLOGGER_API_KEY;
 const BLOG_ID = process.env.EXPO_PUBLIC_BLOGGER_BLOG_ID;
 
 export const getArticles = async () => {
-  if (!db) {
-    const response = await axios.get(
-      `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts?key=${API_KEY}`
-    );
-    return response.data.items || [];
-  }
-
   try {
-    const snap = await getDocs(collection(db, "articles"));
-    if (snap.docs.length > 0) {
-      // Sort articles by published date descending
-      return snap.docs.map(d => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => new Date(b.published).getTime() - new Date(a.published).getTime());
-    }
-
-    // Seed Firestore with Blogger articles if empty
+    // We added maxResults=50 so it fetches all 10 of your articles
     const response = await axios.get(
-      `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts?key=${API_KEY}`
+      `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts?key=${API_KEY}&maxResults=50`
     );
-    const items = response.data.items || [];
-
-    for (const item of items) {
-      await setDoc(doc(db, "articles", item.id), {
-        title: item.title,
-        content: item.content || "",
-        published: item.published || new Date().toISOString(),
-        author: {
-          displayName: item.author?.displayName || 'Admin'
-        },
-        labels: item.labels || ['General'],
-      });
-    }
-
-    return items;
-  } catch (error) {
-    console.error("Error in getArticles:", error);
-    const response = await axios.get(
-      `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts?key=${API_KEY}`
-    );
+    
     return response.data.items || [];
+  } catch (error) {
+    console.error("Error fetching from Blogger:", error);
+    return [];
   }
 };
 
 export const getArticleById = async (postId) => {
-  if (!db) {
+  try {
     const response = await axios.get(
       `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts/${postId}?key=${API_KEY}`
     );
     return response.data;
+  } catch (error) {
+    console.error("Error fetching article by ID:", error);
+    return null;
   }
-
-  try {
-    const docSnap = await getDoc(doc(db, "articles", postId));
-    if (docSnap.exists()) {
-      return { id: docSnap.id, ...docSnap.data() };
-    }
-  } catch (e) {
-    console.error("Error in getArticleById:", e);
-  }
-
-  const response = await axios.get(
-    `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts/${postId}?key=${API_KEY}`
-  );
-  return response.data;
 };
 
+// These are left here so your Admin screen doesn't crash, 
+// but they will now throw a helpful error if you try to use them!
 export const addArticle = async (articleData) => {
-  if (!db) throw new Error("Firestore is unavailable.");
-  const newDocRef = doc(collection(db, "articles"));
-  const data = {
-    title: articleData.title,
-    content: articleData.content,
-    published: new Date().toISOString(),
-    author: {
-      displayName: articleData.author || "Admin"
-    },
-    labels: [articleData.category || "General"]
-  };
-  await setDoc(newDocRef, data);
-  return { id: newDocRef.id, ...data };
+  throw new Error("Please add new articles directly on the Google Blogger website.");
 };
 
 export const updateArticle = async (id, articleData) => {
-  if (!db) throw new Error("Firestore is unavailable.");
-  const docRef = doc(db, "articles", id);
-  const data = {
-    title: articleData.title,
-    content: articleData.content,
-    labels: [articleData.category || "General"]
-  };
-  await updateDoc(docRef, data);
+  throw new Error("Please edit articles directly on the Google Blogger website.");
 };
 
 export const deleteArticle = async (id) => {
-  if (!db) throw new Error("Firestore is unavailable.");
-  await deleteDoc(doc(db, "articles", id));
+  throw new Error("Please delete articles directly on the Google Blogger website.");
 };

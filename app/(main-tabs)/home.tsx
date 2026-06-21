@@ -79,13 +79,6 @@ const moodOptions: MoodOption[] = [
   },
 ];
 
-const articleMoods: Record<string, string[]> = {
-  "Understanding Anxiety in Daily Life": ["sad", "angry"],
-  "How Social Media Affects Mental Health": ["sad", "calm"],
-  "The Global State of Mental Health": ["calm"],
-  "Understanding Major Depressive Disorder": ["sad"],
-};
-
 const copingCards: CopingCard[] = [
   {
     id: "1",
@@ -162,30 +155,56 @@ export default function HomePage() {
   const fetchArticles = async () => {
     try {
       const data = await getArticles();
+      const articlesArray = Array.isArray(data) ? data : data?.items || [];
+      
+      console.log(`Successfully fetched ${articlesArray.length} articles from Blogger`);
 
+      const coverImages = [
+        "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/How Social Media Affects Mental Health.png",
+        "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/The Global State of Mental Health.png",
+        "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Understanding Anxiety in Daily Life.png",
+        "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Understanding Major Depressive Disorder.png",
+        "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Practicing Gratitude for a Happier Life.png",
+        "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/How Positive Relationships Improve Mental Health.png",
+        "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Recognizing Early Signs of Emotional Overstimulation.png",
+        "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Staying Grounded During Intense Emotions.png",
+        "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Understanding the Root Causes of Anger.png",
+        "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Healthy Ways to Express Frustration.png",
+        // ... (keep the rest of your cover images here)
+      ];
 
-    const coverImages = [
-      "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/How Social Media Affects Mental Health.png",
-      "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/The Global State of Mental Health.png",
-      "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Understanding Anxiety in Daily Life.png",
-      "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Understanding Major Depressive Disorder.png",
-    ];
+      // Define the exact exact moods your UI looks for
+      const validMoods = ["happy", "calm", "manic", "angry", "sad"];
 
-      // Fix: directly slice the 'data' array since it already contains the items
-      const formatted: ReadCard[] = data?.slice(0, 3).map((item: any, index: number) => ({
-        id: item.id,
-        category: "BLOG",
-        title: item.title.replace(/<[^>]+>/g, ""),
-        author: item.author?.displayName || "Admin",
-        minutes: "5 min read",
-        image: coverImages[index % coverImages.length],
-        moods:
-          articleMoods[item.title.replace(/<[^>]+>/g, "")] || ["calm"],
-      }));
+      const formatted: ReadCard[] = articlesArray.slice(0, 10).map((item: any, index: number) => {
+        
+        // 1. Get labels from Blogger and clean them up
+        const rawLabels = item.labels || [];
+        const lowercaseLabels = rawLabels.map((l: any) => String(l).toLowerCase().trim());
 
-      setReads(formatted || []);
+        // 2. Filter out random tags (like "General", "Blog") and only keep exact mood matches
+        // Add the : string type definition inside the filter
+        const matchedMoods = lowercaseLabels.filter((label: string) => validMoods.includes(label));
+
+        return {
+          id: item.id,
+          category: "BLOG",
+          title: item.title ? item.title.replace(/<[^>]+>/g, "") : "Untitled",
+          author: item.author?.displayName || "Admin",
+          minutes: "5 min read",
+          image: coverImages[index % coverImages.length],
+          
+          // 3. THE FIX: If the article doesn't have a valid mood label yet, 
+          // give it all of them so it shows up on the dashboard!
+          moods: matchedMoods.length > 0 ? matchedMoods : validMoods, 
+        };
+      });
+
+      console.log("FORMATTED MOODS FOR FIRST ARTICLE:", formatted[0]?.moods);
+      setReads(formatted);
+      
     } catch (error) {
-      console.log("API Error:", error);
+      console.log("API Error in fetchArticles:", error);
     }
   };
 
