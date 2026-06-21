@@ -159,32 +159,28 @@ export default function HomePage() {
       
       console.log(`Successfully fetched ${articlesArray.length} articles from Blogger`);
 
-      const coverImages = [
-        "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/How Social Media Affects Mental Health.png",
-        "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/The Global State of Mental Health.png",
-        "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Understanding Anxiety in Daily Life.png",
-        "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Understanding Major Depressive Disorder.png",
-        "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Practicing Gratitude for a Happier Life.png",
-        "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/How Positive Relationships Improve Mental Health.png",
-        "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Recognizing Early Signs of Emotional Overstimulation.png",
-        "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Staying Grounded During Intense Emotions.png",
-        "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Understanding the Root Causes of Anger.png",
-        "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Healthy Ways to Express Frustration.png",
-        // ... (keep the rest of your cover images here)
-      ];
 
-      // Define the exact exact moods your UI looks for
       const validMoods = ["happy", "calm", "manic", "angry", "sad"];
 
       const formatted: ReadCard[] = articlesArray.slice(0, 10).map((item: any, index: number) => {
         
-        // 1. Get labels from Blogger and clean them up
         const rawLabels = item.labels || [];
         const lowercaseLabels = rawLabels.map((l: any) => String(l).toLowerCase().trim());
 
-        // 2. Filter out random tags (like "General", "Blog") and only keep exact mood matches
-        // Add the : string type definition inside the filter
         const matchedMoods = lowercaseLabels.filter((label: string) => validMoods.includes(label));
+
+        let coverPhoto = "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/ArticleBackground.png"; // Default fallback image
+  
+        if (item.images && item.images.length > 0) {
+          coverPhoto = item.images[0].url;
+        } 
+      
+        else if (item.content) {
+          const imgMatch = item.content.match(/<img[^>]+src="([^">]+)"/);
+          if (imgMatch && imgMatch[1]) {
+            coverPhoto = imgMatch[1];
+          }
+        }
 
         return {
           id: item.id,
@@ -192,10 +188,7 @@ export default function HomePage() {
           title: item.title ? item.title.replace(/<[^>]+>/g, "") : "Untitled",
           author: item.author?.displayName || "Admin",
           minutes: "5 min read",
-          image: coverImages[index % coverImages.length],
-          
-          // 3. THE FIX: If the article doesn't have a valid mood label yet, 
-          // give it all of them so it shows up on the dashboard!
+          image: coverPhoto,
           moods: matchedMoods.length > 0 ? matchedMoods : validMoods, 
         };
       });
