@@ -38,6 +38,7 @@ type ReadCard = {
   author: string;
   minutes: string;
   image: string;
+  moods: string[];
 };
 
 const moodOptions: MoodOption[] = [
@@ -77,6 +78,13 @@ const moodOptions: MoodOption[] = [
     tint: "#EFFBDF",
   },
 ];
+
+const articleMoods: Record<string, string[]> = {
+  "Understanding Anxiety in Daily Life": ["sad", "angry"],
+  "How Social Media Affects Mental Health": ["sad", "calm"],
+  "The Global State of Mental Health": ["calm"],
+  "Understanding Major Depressive Disorder": ["sad"],
+};
 
 const copingCards: CopingCard[] = [
   {
@@ -171,6 +179,8 @@ export default function HomePage() {
         author: item.author?.displayName || "Admin",
         minutes: "5 min read",
         image: coverImages[index % coverImages.length],
+        moods:
+          articleMoods[item.title.replace(/<[^>]+>/g, "")] || ["calm"],
       }));
 
       setReads(formatted || []);
@@ -178,6 +188,11 @@ export default function HomePage() {
       console.log("API Error:", error);
     }
   };
+
+  const filteredReads = reads.filter((article) =>
+  article.moods.includes(selectedMood)
+  );
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar
@@ -284,7 +299,7 @@ export default function HomePage() {
 
           <Text style={styles.readsTitle}>Mindful Reads</Text>
 
-          {reads.map((item) => (
+          {filteredReads.map((item) => (
             <TouchableOpacity
               style={styles.readCard}
               key={item.id}
