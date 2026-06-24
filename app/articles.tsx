@@ -23,16 +23,32 @@ export default function ArticlesScreen() {
   const fetchArticles = async () => {
     try {
       const data = await getArticles();
+      
+      const articlesArray = Array.isArray(data) ? data : data?.items || [];
 
-      const formatted: ReadCard[] = data.map((item: any) => ({
-        id: item.id,
-        category: "BLOG",
-        title: item.title.replace(/<[^>]+>/g, ""),
-        author: item.author?.displayName || "Admin",
-        minutes: "5 min read",
-        image:
-          "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/ArticleBackground.png",
-      }));
+      const formatted: ReadCard[] = articlesArray.map((item: any) => {
+        
+        let coverPhoto = "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/ArticleBackground.png"; 
+
+        if (item.images && item.images.length > 0) {
+          coverPhoto = item.images[0].url;
+        } 
+        else if (item.content) {
+          const imgMatch = item.content.match(/<img[^>]+src="([^">]+)"/);
+          if (imgMatch && imgMatch[1]) {
+            coverPhoto = imgMatch[1];
+          }
+        }
+
+        return {
+          id: item.id,
+          category: "BLOG",
+          title: item.title ? item.title.replace(/<[^>]+>/g, "") : "Untitled",
+          author: item.author?.displayName || "Admin",
+          minutes: "5 min read",
+          image: coverPhoto,
+        };
+      });
 
       setArticles(formatted);
     } catch (error) {

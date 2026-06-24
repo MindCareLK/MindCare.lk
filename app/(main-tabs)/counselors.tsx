@@ -1,29 +1,45 @@
 import { Feather, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { StatusBar } from 'react-native';
 
 import { CounselorProfile, listCounselors } from '@/lib/counselors';
+import { useAuthContext } from '@/components/AuthContext';
+import AuthRequiredModal from '@/components/AuthRequiredModal';
+import { db } from '@/lib/firebase';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 
 const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=300&q=80';
 
 export default function CounselorsPage() {
+  const { userRole } = useAuthContext();
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [counselors, setCounselors] = useState<CounselorProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const loadCounselors = async () => {
-      try {
-        const nextCounselors = await listCounselors();
-        setCounselors(nextCounselors);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    if (!db) return;
 
-    void loadCounselors();
+    const q = query(
+      collection(db, 'counselors'),
+      where('role', '==', 'counselor'),
+      where('profileCompleted', '==', true)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs
+        .map((docSnap) => docSnap.data() as CounselorProfile)
+        .filter((item) => item.fullName?.trim() && item.specialty?.trim());
+      setCounselors(list);
+      setIsLoading(false);
+    }, (err) => {
+      console.error("Error listening to counselors list:", err);
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   return (
@@ -62,59 +78,87 @@ export default function CounselorsPage() {
             </View>
           ) : null}
 
-          {counselors.map((item) => (
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#2F88E8" />
+              <Text style={styles.loadingText}>Fetching counselors...</Text>
+            </View>
+          ) : (
+            counselors.map((item) => (
             <View key={item.uid} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={styles.avatarWrap}>
-                  <Image source={{ uri: DEFAULT_AVATAR }} style={styles.avatar} />
-                  <View style={styles.onlineDot} />
-                </View>
-                <View style={styles.cardMain}>
-                  <View style={styles.nameRow}>
-                    <Text style={styles.name}>{item.displayName || item.fullName}</Text>
-                  </View>
-                  <Text style={styles.title}>{item.specialty.toUpperCase()}</Text>
-                  <View style={styles.tagsRow}>
-                    {(item.qualifications.length ? item.qualifications : ['Verified', 'Available']).slice(0, 2).map((tag) => (
-                      <Text key={tag} style={styles.tagText}>
-                        {tag}
-                      </Text>
-                    ))}
-                  </View>
-                </View>
-              </View>
-              <View style={{ borderBottomWidth: 1, borderBottomColor: '#ccc', marginVertical: 10, marginLeft: 60, }} />
-
-              <View style={styles.infoRow}>
-                <View style={styles.infoPill}>
-                  <MaterialCommunityIcons name="license" size={15} color="#6B7280" />
-                  <Text style={styles.infoText}>{item.qualifications.length || 1} credentials</Text>
-                </View>
-                <View style={styles.infoPill}>
-                  <Feather name="clock" size={15} color="#6B7280" />
-                  <Text style={styles.infoText}>{item.bio ? 'Bio added' : 'Profile ready'}</Text>
-                </View>
-              </View>
-
               <TouchableOpacity
-                style={styles.bookButton}
-                activeOpacity={0.88}
-                onPress={() =>
+                activeOpacity={0.85}
+                onPress={() => {
                   router.push({
-                    pathname: '/schedule-session',
+                    pathname: '/doctor_profile',
                     params: {
+                      uid: item.uid,
                       name: item.displayName || item.fullName,
                       title: item.specialty,
                       years: `${Math.max(item.qualifications.length, 1)} credentials`,
                       avatar: DEFAULT_AVATAR,
                       tags: (item.qualifications.length ? item.qualifications : [item.specialty]).slice(0, 2).join(','),
                     },
-                  })
-                }>
+                  });
+                }}
+              >
+                <View style={styles.cardHeader}>
+                  <View style={styles.avatarWrap}>
+                    <Image source={{ uri: DEFAULT_AVATAR }} style={styles.avatar} />
+                    <View style={styles.onlineDot} />
+                  </View>
+                  <View style={styles.cardMain}>
+                    <View style={styles.nameRow}>
+                      <Text style={styles.name}>{item.displayName || item.fullName}</Text>
+                    </View>
+                    <Text style={styles.title}>{item.specialty.toUpperCase()}</Text>
+                    <View style={styles.tagsRow}>
+                      {(item.qualifications.length ? item.qualifications : ['Verified', 'Available']).slice(0, 2).map((tag) => (
+                        <Text key={tag} style={styles.tagText}>
+                          {tag}
+                        </Text>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+                <View style={{ borderBottomWidth: 1, borderBottomColor: '#ccc', marginVertical: 10, marginLeft: 60, }} />
+
+                <View style={styles.infoRow}>
+                  <View style={styles.infoPill}>
+                    <MaterialCommunityIcons name="license" size={15} color="#6B7280" />
+                    <Text style={styles.infoText}>{item.qualifications.length || 1} credentials</Text>
+                  </View>
+                  <View style={styles.infoPill}>
+                    <Feather name="clock" size={15} color="#6B7280" />
+                    <Text style={styles.infoText}>{item.bio ? 'Bio added' : 'Profile ready'}</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.bookButton}
+                activeOpacity={0.88}
+                onPress={() => {
+                  if (userRole !== 'member') {
+                    setShowAuthModal(true);
+                    return;
+                  }
+                  router.push({
+                    pathname: '/schedule-session',
+                    params: {
+                      uid: item.uid,
+                      name: item.displayName || item.fullName,
+                      title: item.specialty,
+                      years: `${Math.max(item.qualifications.length, 1)} credentials`,
+                      avatar: DEFAULT_AVATAR,
+                      tags: (item.qualifications.length ? item.qualifications : [item.specialty]).slice(0, 2).join(','),
+                    },
+                  });
+                }}>
                 <Text style={styles.bookText}>Book Session</Text>
               </TouchableOpacity>
             </View>
-          ))}
+          )))}
 
           <View style={styles.verifiedCard}>
             <View style={styles.verifiedIcon}>
@@ -128,6 +172,15 @@ export default function CounselorsPage() {
         </ScrollView>
 
       </View>
+
+      <AuthRequiredModal
+        visible={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onLogin={() => {
+          setShowAuthModal(false);
+          router.push('/member-login');
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -407,6 +460,18 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 12,
     lineHeight: 18,
+    color: '#7A8494',
+    fontWeight: '500',
+  },
+  loadingContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
     color: '#7A8494',
     fontWeight: '500',
   },

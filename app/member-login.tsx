@@ -15,6 +15,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { isCurrentUserAdmin } from "@/lib/admin";
+
 export default function LoginScreen() {
   const [emailAddress, setEmailAddress] = useState("");
   const [password, setPassword] = useState("");
@@ -25,7 +27,11 @@ export default function LoginScreen() {
 
   const handleBack = () => {
     void Haptics.selectionAsync();
-    router.back();
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/role-selection');
+    }
   };
 
   const handleSignIn = async () => {
@@ -37,7 +43,13 @@ export default function LoginScreen() {
     try {
       await signInMember(emailAddress.trim().toLowerCase(), password);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace("/(main-tabs)/profile");
+      
+      const isAdmin = await isCurrentUserAdmin();
+      if (isAdmin) {
+        router.replace("/(admin-tabs)/dashboard" as any);
+      } else {
+        router.replace("/(main-tabs)/profile");
+      }
     } catch (error) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert(
@@ -78,7 +90,13 @@ export default function LoginScreen() {
 
       await signInMemberWithGoogle(tokens.idToken, tokens.accessToken);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace("/(main-tabs)/profile");
+      
+      const isAdmin = await isCurrentUserAdmin();
+      if (isAdmin) {
+        router.replace("/(admin-tabs)/dashboard" as any);
+      } else {
+        router.replace("/(main-tabs)/profile");
+      }
     } catch (error) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert(

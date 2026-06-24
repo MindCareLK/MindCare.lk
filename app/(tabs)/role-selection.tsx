@@ -3,6 +3,8 @@ import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect } from 'react';
+import { useAuthContext } from '@/components/AuthContext';
 
 type JoinCard = {
   id: 'member' | 'counselor';
@@ -33,6 +35,20 @@ const joinCards: JoinCard[] = [
 ];
 
 export default function RoleSelectionScreen() {
+  const { isAuthReady, currentUser, userRole } = useAuthContext();
+
+  useEffect(() => {
+    if (isAuthReady && currentUser) {
+      if (userRole === 'admin') {
+        router.replace('/(admin-tabs)/dashboard');
+      } else if (userRole === 'counselor') {
+        router.replace('/(counselor-tabs)/overview');
+      } else if (userRole === 'member') {
+        router.replace('/(main-tabs)/home');
+      }
+    }
+  }, [isAuthReady, currentUser, userRole]);
+
   const handlePressCard = (id: JoinCard['id']) => {
     void Haptics.selectionAsync();
 

@@ -1,18 +1,25 @@
 import { Feather, FontAwesome, Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import React from 'react';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuthContext } from '@/components/AuthContext';
+import AuthRequiredModal from '@/components/AuthRequiredModal';
 
 export default function DoctorProfilePage() {
+  const { userRole } = useAuthContext();
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const params = useLocalSearchParams<{
+    uid?: string;
     name?: string;
     title?: string;
     years?: string;
     avatar?: string;
+    tags?: string;
   }>();
 
   // Fallback values if params are not passed
+  const uid = params.uid ?? '';
   const name = params.name ?? 'Mrs. Dinithi Jayawardena';
   const title = params.title ?? 'Clinical Psychologist';
   const years = params.years ?? '12 years';
@@ -114,7 +121,23 @@ export default function DoctorProfilePage() {
           {/* Primary Action Button */}
           <TouchableOpacity 
             style={styles.bookButton} 
-            onPress={() => router.push('/counselors')} // Logic to go back to scheduling
+            onPress={() => {
+              if (userRole !== 'member') {
+                setShowAuthModal(true);
+                return;
+              }
+              router.push({
+                pathname: '/schedule-session',
+                params: {
+                  uid: uid,
+                  name: name,
+                  title: title,
+                  years: years,
+                  avatar: avatar,
+                  tags: params.tags,
+                },
+              });
+            }}
           >
             <Text style={styles.bookButtonText}>Book Appointment</Text>
           </TouchableOpacity>
@@ -122,24 +145,33 @@ export default function DoctorProfilePage() {
 
         {/* Integrated Bottom Bar */}
         <View style={styles.bottomBar}>
-          <TouchableOpacity style={styles.navItem} activeOpacity={0.85} onPress={() => router.replace('/home')}>
+          <TouchableOpacity style={styles.navItem} activeOpacity={0.85} onPress={() => router.replace('/(main-tabs)/home')}>
             <Feather name="home" size={16} color="#8E969F" />
             <Text style={styles.navText}>Home</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} activeOpacity={0.85} onPress={() => router.replace('/ai-chat')}>
+          <TouchableOpacity style={styles.navItem} activeOpacity={0.85} onPress={() => router.replace('/(main-tabs)/ai-chat')}>
             <Feather name="message-square" size={16} color="#8E969F" />
             <Text style={styles.navText}>Chat</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} activeOpacity={0.85} onPress={() => router.replace('/counselors')}>
+          <TouchableOpacity style={styles.navItem} activeOpacity={0.85} onPress={() => router.replace('/(main-tabs)/counselors')}>
             <Feather name="users" size={16} color="#30353B" />
             <Text style={styles.navActive}>Counselors</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} activeOpacity={0.85} onPress={() => router.replace('./profile')}>
+          <TouchableOpacity style={styles.navItem} activeOpacity={0.85} onPress={() => router.replace('/(main-tabs)/profile')}>
             <Feather name="user" size={16} color="#8E969F" />
             <Text style={styles.navText}>Profile</Text>
           </TouchableOpacity>
         </View>
       </View>
+
+      <AuthRequiredModal
+        visible={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onLogin={() => {
+          setShowAuthModal(false);
+          router.push('/member-login');
+        }}
+      />
     </SafeAreaView>
   );
 }

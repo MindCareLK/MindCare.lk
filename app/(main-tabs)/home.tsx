@@ -38,6 +38,7 @@ type ReadCard = {
   author: string;
   minutes: string;
   image: string;
+  moods: string[];
 };
 
 const moodOptions: MoodOption[] = [
@@ -154,23 +155,56 @@ export default function HomePage() {
   const fetchArticles = async () => {
     try {
       const data = await getArticles();
+      const articlesArray = Array.isArray(data) ? data : data?.items || [];
+      
+      console.log(`Successfully fetched ${articlesArray.length} articles from Blogger`);
 
-      // Fix: directly slice the 'data' array since it already contains the items
-      const formatted: ReadCard[] = data?.slice(0, 3).map((item: any) => ({
-        id: item.id,
-        category: "BLOG",
-        title: item.title.replace(/<[^>]+>/g, ""),
-        author: item.author?.displayName || "Admin",
-        minutes: "5 min read",
-        image:
-          "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/ArticleBackground.png",
-      }));
 
-      setReads(formatted || []);
+      const validMoods = ["happy", "calm", "manic", "angry", "sad"];
+
+      const formatted: ReadCard[] = articlesArray.slice(0, 10).map((item: any, index: number) => {
+        
+        const rawLabels = item.labels || [];
+        const lowercaseLabels = rawLabels.map((l: any) => String(l).toLowerCase().trim());
+
+        const matchedMoods = lowercaseLabels.filter((label: string) => validMoods.includes(label));
+
+        let coverPhoto = "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/ArticleBackground.png"; // Default fallback image
+  
+        if (item.images && item.images.length > 0) {
+          coverPhoto = item.images[0].url;
+        } 
+      
+        else if (item.content) {
+          const imgMatch = item.content.match(/<img[^>]+src="([^">]+)"/);
+          if (imgMatch && imgMatch[1]) {
+            coverPhoto = imgMatch[1];
+          }
+        }
+
+        return {
+          id: item.id,
+          category: "BLOG",
+          title: item.title ? item.title.replace(/<[^>]+>/g, "") : "Untitled",
+          author: item.author?.displayName || "Admin",
+          minutes: "5 min read",
+          image: coverPhoto,
+          moods: matchedMoods.length > 0 ? matchedMoods : validMoods, 
+        };
+      });
+
+      console.log("FORMATTED MOODS FOR FIRST ARTICLE:", formatted[0]?.moods);
+      setReads(formatted);
+      
     } catch (error) {
-      console.log("API Error:", error);
+      console.log("API Error in fetchArticles:", error);
     }
   };
+
+  const filteredReads = reads.filter((article) =>
+  article.moods.includes(selectedMood)
+  );
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar
@@ -277,7 +311,7 @@ export default function HomePage() {
 
           <Text style={styles.readsTitle}>Mindful Reads</Text>
 
-          {reads.map((item) => (
+          {filteredReads.map((item) => (
             <TouchableOpacity
               style={styles.readCard}
               key={item.id}

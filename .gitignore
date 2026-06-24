@@ -47,3 +47,8 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Python & SLM Model files
+backend/__pycache__/
+backend/log.txt
+backend/best_model_params_sinhala.pt

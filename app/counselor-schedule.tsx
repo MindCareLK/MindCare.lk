@@ -1,223 +1,256 @@
 import { Feather } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
+import { doc, setDoc } from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import { getCounselorProfile } from "@/lib/counselors";
+import { auth, db } from "@/lib/firebase";
 
 type ScheduleParams = {
   name?: string | string[];
   specialty?: string | string[];
 };
 
-type PeriodId = "morning" | "afternoon" | "evening";
-
-type TimeSlot = {
+type TimeBlock = {
   id: string;
-  startTime: string;
-  endTime: string;
-  isAvailable: boolean;
+  start: string;
+  end: string;
 };
 
-type DayTemplate = Record<PeriodId, TimeSlot[]>;
+type DaySchedule = {
+  blocks: TimeBlock[];
+  sessionDuration: number; // in minutes
+  bufferTime: number; // in minutes
+};
 
 type FeedbackTone = "success" | "error";
 
-const WEEKDAY_IDS = ["mon", "tue", "wed", "thu", "fri"] as const;
-const WEEKDAY_LABELS = ["MON", "TUE", "WED", "THU", "FRI"] as const;
+const WEEKDAY_IDS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 const MONTH_LABELS = [
-  "JAN",
-  "FEB",
-  "MAR",
-  "APR",
-  "MAY",
-  "JUN",
-  "JUL",
-  "AUG",
-  "SEP",
-  "OCT",
-  "NOV",
-  "DEC",
+  "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+  "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
 ] as const;
 
-const PERIOD_META: Record<
-  PeriodId,
-  { title: string; hint: string; color: string; start: string; end: string }
-> = {
-  morning: {
-    title: "Morning",
-    hint: "Add one or more morning slots",
-    color: "#F0B06B",
-    start: "08:00 AM",
-    end: "09:00 AM",
-  },
-  afternoon: {
-    title: "Afternoon",
-    hint: "Add one or more afternoon slots",
-    color: "#2F88E8",
-    start: "01:00 PM",
-    end: "02:00 PM",
-  },
-  evening: {
-    title: "Evening",
-    hint: "Add one or more evening slots",
-    color: "#B884F8",
-    start: "06:00 PM",
-    end: "07:00 PM",
-  },
+const DURATION_OPTIONS = [30, 45, 60];
+const BUFFER_OPTIONS = [0, 5, 10, 15];
+
+
+
+const createBlock = (): TimeBlock => ({
+  id: `block-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  start: "08:00 AM",
+  end: "12:00 PM",
+});
+
+const buildDefaultSchedule = (): DaySchedule => ({
+  blocks: [createBlock()],
+  sessionDuration: 30,
+  bufferTime: 10,
+});
+
+const cloneSchedule = (sched: DaySchedule): DaySchedule => ({
+  blocks: sched.blocks.map((b) => ({ ...b })),
+  sessionDuration: sched.sessionDuration,
+  bufferTime: sched.bufferTime,
+});
+
+const cloneSchedulesByDate = (schedules: Record<string, DaySchedule>) => {
+  const result: Record<string, DaySchedule> = {};
+  for (const dateKey of Object.keys(schedules)) {
+    result[dateKey] = cloneSchedule(schedules[dateKey]);
+  }
+  return result;
 };
 
-const createSlot = (period: PeriodId): TimeSlot => ({
-  id: `${period}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-  startTime: PERIOD_META[period].start,
-  endTime: PERIOD_META[period].end,
-  isAvailable: true,
-});
+// Parsing helper to support backward compatibility
+function parseDaySchedule(data: any): DaySchedule {
+  if (!data) {
+    return buildDefaultSchedule();
+  }
 
-const buildDefaultTemplate = (): DayTemplate => ({
-  morning: [createSlot("morning")],
-  afternoon: [createSlot("afternoon")],
-  evening: [createSlot("evening")],
-});
+  if (data.blocks && Array.isArray(data.blocks)) {
+    return {
+      blocks: data.blocks,
+      sessionDuration: typeof data.sessionDuration === "number" ? data.sessionDuration : 30,
+      bufferTime: typeof data.bufferTime === "number" ? data.bufferTime : 10,
+    };
+  }
 
-const cloneTemplate = (template: DayTemplate): DayTemplate => ({
-  morning: template.morning.map((slot) => ({ ...slot })),
-  afternoon: template.afternoon.map((slot) => ({ ...slot })),
-  evening: template.evening.map((slot) => ({ ...slot })),
-});
+  // Backward compatibility migration for old DayTemplate schema
+  const blocks: TimeBlock[] = [];
+  const periods = ["morning", "afternoon", "evening"] as const;
+  let allSlots: any[] = [];
+  for (const p of periods) {
+    if (data[p] && Array.isArray(data[p])) {
+      allSlots = [...allSlots, ...data[p]];
+    }
+  }
 
-const getCurrentWeekMonday = (): Date => {
-  const today = new Date();
-  const monday = new Date(today);
-  monday.setHours(0, 0, 0, 0);
-  const dayOfWeek = monday.getDay();
-  const daysFromMonday = (dayOfWeek + 6) % 7;
-  monday.setDate(monday.getDate() - daysFromMonday);
-  return monday;
-};
+  if (allSlots.length > 0) {
+    allSlots.forEach((slot, index) => {
+      if (slot.isAvailable && slot.startTime && slot.endTime) {
+        blocks.push({
+          id: `block-migrated-${index}`,
+          start: slot.startTime,
+          end: slot.endTime,
+        });
+      }
+    });
+  }
 
-const formatIsoDate = (date: Date) => {
+  if (blocks.length === 0) {
+    blocks.push(createBlock());
+  }
+
+  return {
+    blocks,
+    sessionDuration: 30,
+    bufferTime: 10,
+  };
+}
+
+export function parseTimeToMinutes(timeStr: string): number | null {
+  const match = timeStr.trim().match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+  if (!match) return null;
+
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const ampm = match[3].toUpperCase();
+
+  if (ampm === "PM" && hours < 12) {
+    hours += 12;
+  } else if (ampm === "AM" && hours === 12) {
+    hours = 0;
+  }
+
+  return hours * 60 + minutes;
+}
+
+export function formatMinutesToTime(totalMinutes: number): string {
+  let hours = Math.floor(totalMinutes / 60) % 24;
+  const minutes = totalMinutes % 60;
+  const ampm = hours >= 12 ? "PM" : "AM";
+
+  if (hours > 12) {
+    hours -= 12;
+  } else if (hours === 0) {
+    hours = 12;
+  }
+
+  const hStr = String(hours);
+  const mStr = String(minutes).padStart(2, "0");
+
+  return `${hStr}:${mStr} ${ampm}`;
+}
+
+export function parseTimeToDate(timeStr: string): Date {
+  const date = new Date();
+  const mins = parseTimeToMinutes(timeStr);
+  if (mins !== null) {
+    const hours = Math.floor(mins / 60);
+    const minutes = mins % 60;
+    date.setHours(hours, minutes, 0, 0);
+  } else {
+    date.setHours(8, 0, 0, 0);
+  }
+  return date;
+}
+
+export function formatDateToTimeString(date: Date): string {
+  const totalMinutes = date.getHours() * 60 + date.getMinutes();
+  return formatMinutesToTime(totalMinutes);
+}
+
+export function generateTimeSlots(
+  startStr: string,
+  endStr: string,
+  durationMinutes: number,
+  bufferMinutes: number
+): { startTime: string; endTime: string }[] {
+  const slots: { startTime: string; endTime: string }[] = [];
+
+  const startTotal = parseTimeToMinutes(startStr);
+  const endTotal = parseTimeToMinutes(endStr);
+
+  if (startTotal === null || endTotal === null || startTotal >= endTotal) {
+    return [];
+  }
+
+  let currentStart = startTotal;
+  while (currentStart + durationMinutes <= endTotal) {
+    const currentEnd = currentStart + durationMinutes;
+    slots.push({
+      startTime: formatMinutesToTime(currentStart),
+      endTime: formatMinutesToTime(currentEnd),
+    });
+    currentStart = currentEnd + bufferMinutes;
+  }
+
+  return slots;
+}
+
+function findOverlappingBlocks(blocks: TimeBlock[]): string | null {
+  const sorted = blocks
+    .map((b) => ({
+      start: parseTimeToMinutes(b.start),
+      end: parseTimeToMinutes(b.end),
+      label: `${b.start} - ${b.end}`,
+    }))
+    .filter((b) => b.start !== null && b.end !== null)
+    .sort((a, b) => a.start! - b.start!);
+
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = sorted[i - 1];
+    const curr = sorted[i];
+    if (curr.start! < prev.end!) {
+      return `${curr.label} overlaps with ${prev.label}`;
+    }
+  }
+  return null;
+}
+
+
+
+function formatIsoDate(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-};
-
-const toSingleValue = (value: string | string[] | undefined): string =>
-  typeof value === "string"
-    ? value
-    : Array.isArray(value)
-      ? (value[0] ?? "")
-      : "";
-
-const parseTimeToMinutes = (value: string) => {
-  const normalized = value.trim().toUpperCase();
-  const match = normalized.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/);
-
-  if (!match) {
-    return null;
-  }
-
-  const [, hoursText, minutesText, meridiem] = match;
-  const hours = Number(hoursText);
-  const minutes = Number(minutesText);
-
-  if (hours < 1 || hours > 12 || minutes < 0 || minutes > 59) {
-    return null;
-  }
-
-  const normalizedHours = hours % 12;
-  const meridiemOffset = meridiem === "PM" ? 12 * 60 : 0;
-  return normalizedHours * 60 + minutes + meridiemOffset;
-};
-
-const buildSlotLabel = (period: PeriodId, index: number) =>
-  `${PERIOD_META[period].title} Slot ${index + 1}`;
-
-const findOverlapConflict = (
-  template: DayTemplate,
-  targetPeriod: PeriodId,
-  targetSlotId: string,
-) => {
-  const targetSlots = template[targetPeriod];
-  const targetIndex = targetSlots.findIndex((slot) => slot.id === targetSlotId);
-
-  if (targetIndex === -1) {
-    return null;
-  }
-
-  const targetSlot = targetSlots[targetIndex];
-  if (!targetSlot.isAvailable) {
-    return null;
-  }
-
-  const targetStart = parseTimeToMinutes(targetSlot.startTime);
-  const targetEnd = parseTimeToMinutes(targetSlot.endTime);
-
-  if (targetStart === null || targetEnd === null || targetStart >= targetEnd) {
-    return null;
-  }
-
-  for (const period of ["morning", "afternoon", "evening"] as const) {
-    for (const [index, slot] of template[period].entries()) {
-      if (period === targetPeriod && slot.id === targetSlotId) {
-        continue;
-      }
-
-      if (!slot.isAvailable) {
-        continue;
-      }
-
-      const slotStart = parseTimeToMinutes(slot.startTime);
-      const slotEnd = parseTimeToMinutes(slot.endTime);
-
-      if (slotStart === null || slotEnd === null || slotStart >= slotEnd) {
-        continue;
-      }
-
-      if (targetStart < slotEnd && slotStart < targetEnd) {
-        return {
-          currentLabel: buildSlotLabel(targetPeriod, targetIndex),
-          conflictLabel: buildSlotLabel(period, index),
-        };
-      }
-    }
-  }
-
-  return null;
-};
+}
 
 export default function CounselorScheduleScreen() {
   const params = useLocalSearchParams<ScheduleParams>();
-  const counselorName = toSingleValue(params.name);
-  const specialty = toSingleValue(params.specialty);
-  const initialTemplate = buildDefaultTemplate();
-
   const [weekOffset, setWeekOffset] = useState(0);
-  const [selectedDay, setSelectedDay] = useState<(typeof WEEKDAY_IDS)[number]>(
-    WEEKDAY_IDS[0],
-  );
-  const [defaultTemplate] = useState<DayTemplate>(
-    () => cloneTemplate(initialTemplate),
-  );
-  const [templatesByDate, setTemplatesByDate] = useState<Record<string, DayTemplate>>(
-    {},
-  );
-  const [savedDefaultTemplate, setSavedDefaultTemplate] = useState<DayTemplate>(
-    () => cloneTemplate(initialTemplate),
-  );
-  const [savedTemplatesByDate, setSavedTemplatesByDate] = useState<Record<string, DayTemplate>>(
-    {},
-  );
+  const [selectedDay, setSelectedDay] = useState<(typeof WEEKDAY_IDS)[number]>(() => {
+    const now = new Date();
+    const day = now.getDay(); // 0 is Sun, 1 is Mon, ..., 6 is Sat
+    const mapping: (typeof WEEKDAY_IDS)[number][] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+    return mapping[day];
+  });
+
+  const [defaultSchedule] = useState<DaySchedule>(buildDefaultSchedule());
+  const [schedulesByDate, setSchedulesByDate] = useState<Record<string, DaySchedule>>({});
+
+  const [savedDefaultSchedule, setSavedDefaultSchedule] = useState<DaySchedule>(buildDefaultSchedule());
+  const [savedSchedulesByDate, setSavedSchedulesByDate] = useState<Record<string, DaySchedule>>({});
+
+  const [isSyncing, setIsSyncing] = useState(true);
+
   const [feedbackModal, setFeedbackModal] = useState<{
     visible: boolean;
     title: string;
@@ -230,17 +263,111 @@ export default function CounselorScheduleScreen() {
     tone: "success",
   });
 
-  const displayedDays = useMemo(() => {
-    const monday = getCurrentWeekMonday();
-    monday.setDate(monday.getDate() + weekOffset * 7);
+  const [timePickerConfig, setTimePickerConfig] = useState<{
+    visible: boolean;
+    blockId: string;
+    field: "start" | "end";
+    selectedValue: string;
+  }>({
+    visible: false,
+    blockId: "",
+    field: "start",
+    selectedValue: "08:00 AM",
+  });
 
-    return WEEKDAY_IDS.map((id, index) => {
-      const date = new Date(monday);
-      date.setDate(monday.getDate() + index);
+  const [pickerDate, setPickerDate] = useState<Date>(() => new Date());
+
+  const openTimePicker = (blockId: string, field: "start" | "end", currentValue: string) => {
+    const parsedDate = parseTimeToDate(currentValue);
+    setPickerDate(parsedDate);
+    setTimePickerConfig({
+      visible: true,
+      blockId,
+      field,
+      selectedValue: currentValue,
+    });
+  };
+
+  const handleTimeChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === "android") {
+      // On Android, dismiss visible picker state
+      setTimePickerConfig((prev) => ({ ...prev, visible: false }));
+      if (event.type === "set" && selectedDate) {
+        const newTimeStr = formatDateToTimeString(selectedDate);
+        const { blockId, field } = timePickerConfig;
+        updateBlockTime(blockId, { [field]: newTimeStr });
+        void Haptics.selectionAsync();
+      }
+    } else {
+      // On iOS, update pickerDate state while user is scrolling
+      if (selectedDate) {
+        setPickerDate(selectedDate);
+      }
+    }
+  };
+
+  const confirmIosTime = () => {
+    const newTimeStr = formatDateToTimeString(pickerDate);
+    const { blockId, field } = timePickerConfig;
+    updateBlockTime(blockId, { [field]: newTimeStr });
+    setTimePickerConfig((prev) => ({ ...prev, visible: false }));
+    void Haptics.selectionAsync();
+  };
+
+  const counselorName = Array.isArray(params.name)
+    ? params.name[0]
+    : params.name || "Mr. Tharusha Theekshana";
+  const specialty = Array.isArray(params.specialty)
+    ? params.specialty[0]
+    : params.specialty || "Cognitive Behavioral Therapy";
+
+  useEffect(() => {
+    const user = auth?.currentUser;
+    if (!user) {
+      router.replace("/counselor-login");
+      return;
+    }
+
+    getCounselorProfile(user.uid)
+      .then((profile) => {
+        if (profile && (profile as any).schedules) {
+          const rawScheds = (profile as any).schedules;
+          const parsedScheds: Record<string, DaySchedule> = {};
+          
+          Object.keys(rawScheds).forEach((dateKey) => {
+            parsedScheds[dateKey] = parseDaySchedule(rawScheds[dateKey]);
+          });
+
+          setSchedulesByDate(parsedScheds);
+          setSavedSchedulesByDate(cloneSchedulesByDate(parsedScheds));
+        }
+      })
+      .catch((err) => {
+        console.error("Error fetching schedules:", err);
+      })
+      .finally(() => {
+        setIsSyncing(false);
+      });
+  }, []);
+
+  const displayedDays = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() + weekOffset * 7);
+
+    return Array.from({ length: 7 }).map((_, index) => {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + index);
+
+      const dayOfWeek = date.getDay(); // 0 is Sun, 1 is Mon, ..., 6 is Sat
+      const dayId = dayOfWeek === 0 ? "sun" : WEEKDAY_IDS[dayOfWeek - 1];
+      const label = date.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
 
       return {
-        id,
-        label: WEEKDAY_LABELS[index],
+        id: dayId,
+        label,
         isoDate: formatIsoDate(date),
         date: String(date.getDate()).padStart(2, "0"),
         month: MONTH_LABELS[date.getMonth()],
@@ -249,88 +376,95 @@ export default function CounselorScheduleScreen() {
           day: "numeric",
           year: "numeric",
         }),
+        isPast: false,
       };
     });
   }, [weekOffset]);
 
+  useEffect(() => {
+    if (displayedDays.length > 0) {
+      const exists = displayedDays.some((day) => day.id === selectedDay);
+      if (!exists) {
+        setTimeout(() => {
+          setSelectedDay(displayedDays[0].id);
+        }, 0);
+      }
+    }
+  }, [displayedDays, selectedDay]);
+
   const selectedDayEntry =
-    displayedDays.find((day) => day.id === selectedDay) ?? displayedDays[0];
+    displayedDays.find((day) => day.id === selectedDay) ?? displayedDays[0] ?? { isoDate: "", fullDate: "" };
   const selectedDateKey = selectedDayEntry.isoDate;
-  const selectedTemplate =
-    templatesByDate[selectedDateKey] ?? cloneTemplate(defaultTemplate);
 
-  const openSlots = useMemo(
-    () =>
-      (["morning", "afternoon", "evening"] as const).reduce(
-        (count, period) =>
-          count +
-          selectedTemplate[period].filter((slot) => slot.isAvailable).length,
-        0,
-      ),
-    [selectedTemplate],
-  );
+  const selectedSchedule =
+    schedulesByDate[selectedDateKey] ?? cloneSchedule(defaultSchedule);
 
-  const hasUnsavedChanges = useMemo(
-    () =>
-      JSON.stringify(defaultTemplate) !== JSON.stringify(savedDefaultTemplate) ||
-      JSON.stringify(templatesByDate) !== JSON.stringify(savedTemplatesByDate),
-    [defaultTemplate, savedDefaultTemplate, templatesByDate, savedTemplatesByDate],
-  );
+  // Sliced slots calculated on-the-fly for real-time preview
+  const previewSlots = useMemo(() => {
+    const list: { startTime: string; endTime: string }[] = [];
+    selectedSchedule.blocks.forEach((block) => {
+      const blockSlots = generateTimeSlots(
+        block.start,
+        block.end,
+        selectedSchedule.sessionDuration,
+        selectedSchedule.bufferTime
+      );
+      list.push(...blockSlots);
+    });
+    return list;
+  }, [selectedSchedule]);
 
-  const setSelectedDateTemplate = (nextTemplate: DayTemplate) => {
-    setTemplatesByDate((current) => ({
+  const hasUnsavedChanges = useMemo(() => {
+    return (
+      JSON.stringify(defaultSchedule) !== JSON.stringify(savedDefaultSchedule) ||
+      JSON.stringify(schedulesByDate) !== JSON.stringify(savedSchedulesByDate)
+    );
+  }, [defaultSchedule, savedDefaultSchedule, schedulesByDate, savedSchedulesByDate]);
+
+  const setSelectedDateSchedule = (nextSchedule: DaySchedule) => {
+    setSchedulesByDate((current) => ({
       ...current,
-      [selectedDateKey]: nextTemplate,
+      [selectedDateKey]: nextSchedule,
     }));
   };
 
-  const updateSelectedDateTemplate = (
-    period: PeriodId,
-    updater: (slots: TimeSlot[]) => TimeSlot[],
-  ) => {
-    const nextTemplate = cloneTemplate(selectedTemplate);
-    nextTemplate[period] = updater(nextTemplate[period]);
-    setSelectedDateTemplate(nextTemplate);
-  };
-
-  const applySlotChange = (
-    period: PeriodId,
-    slotId: string,
-    patch: Partial<TimeSlot>,
-  ) => {
-    const nextTemplate = cloneTemplate(selectedTemplate);
-    nextTemplate[period] = nextTemplate[period].map((slot) =>
-      slot.id === slotId ? { ...slot, ...patch } : slot,
+  const updateBlockTime = (blockId: string, patch: Partial<TimeBlock>) => {
+    const nextSchedule = cloneSchedule(selectedSchedule);
+    nextSchedule.blocks = nextSchedule.blocks.map((b) =>
+      b.id === blockId ? { ...b, ...patch } : b
     );
-
-    const overlapConflict = findOverlapConflict(nextTemplate, period, slotId);
-
-    if (overlapConflict) {
-      nextTemplate[period] = nextTemplate[period].map((slot) =>
-        slot.id === slotId ? { ...slot, isAvailable: false } : slot,
-      );
-
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setFeedbackModal({
-        visible: true,
-        title: "Overlapping slot disabled",
-        message: `${overlapConflict.currentLabel} overlaps with ${overlapConflict.conflictLabel}, so it was switched off automatically. Change the time to use it.`,
-        tone: "error",
-      });
-    }
-
-    setSelectedDateTemplate(nextTemplate);
+    setSelectedDateSchedule(nextSchedule);
   };
 
-  const addSlot = (period: PeriodId) => {
-    updateSelectedDateTemplate(period, (slots) => [...slots, createSlot(period)]);
+  const addTimeBlock = () => {
+    const nextSchedule = cloneSchedule(selectedSchedule);
+    nextSchedule.blocks.push(createBlock());
+    setSelectedDateSchedule(nextSchedule);
     void Haptics.selectionAsync();
   };
 
-  const removeSlot = (period: PeriodId, slotId: string) => {
-    updateSelectedDateTemplate(period, (slots) =>
-      slots.length > 1 ? slots.filter((slot) => slot.id !== slotId) : slots,
-    );
+  const removeTimeBlock = (blockId: string) => {
+    const nextSchedule = cloneSchedule(selectedSchedule);
+    if (nextSchedule.blocks.length > 1) {
+      nextSchedule.blocks = nextSchedule.blocks.filter((b) => b.id !== blockId);
+      setSelectedDateSchedule(nextSchedule);
+      void Haptics.selectionAsync();
+    } else {
+      Alert.alert("Cannot Remove", "You must have at least one time block defined.");
+    }
+  };
+
+  const setDuration = (mins: number) => {
+    const nextSchedule = cloneSchedule(selectedSchedule);
+    nextSchedule.sessionDuration = mins;
+    setSelectedDateSchedule(nextSchedule);
+    void Haptics.selectionAsync();
+  };
+
+  const setBuffer = (mins: number) => {
+    const nextSchedule = cloneSchedule(selectedSchedule);
+    nextSchedule.bufferTime = mins;
+    setSelectedDateSchedule(nextSchedule);
     void Haptics.selectionAsync();
   };
 
@@ -342,81 +476,95 @@ export default function CounselorScheduleScreen() {
   };
 
   const handleSave = () => {
-    const activeSlots = (["morning", "afternoon", "evening"] as const)
-      .flatMap((period) =>
-        selectedTemplate[period].map((slot, index) => ({
-          ...slot,
-          period,
-          label: `${PERIOD_META[period].title} Slot ${index + 1}`,
-        })),
-      )
-      .filter((slot) => slot.isAvailable);
+    // 1. Validation checks
+    for (const block of selectedSchedule.blocks) {
+      const startMins = parseTimeToMinutes(block.start);
+      const endMins = parseTimeToMinutes(block.end);
 
-    for (const slot of activeSlots) {
-      const startMinutes = parseTimeToMinutes(slot.startTime);
-      const endMinutes = parseTimeToMinutes(slot.endTime);
-
-      if (startMinutes === null || endMinutes === null) {
+      if (startMins === null || endMins === null) {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         setFeedbackModal({
           visible: true,
           title: "Invalid time format",
-          message: `${slot.label} needs a valid time like 09:00 AM.`,
+          message: "Please choose times in a valid format (e.g., 08:00 AM, 05:30 PM).",
           tone: "error",
         });
         return;
       }
 
-      if (startMinutes >= endMinutes) {
+      if (startMins >= endMins) {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         setFeedbackModal({
           visible: true,
-          title: "Invalid time range",
-          message: `${slot.label} must end after it starts.`,
+          title: "Invalid range",
+          message: `Block start time (${block.start}) must be before end time (${block.end}).`,
           tone: "error",
         });
         return;
       }
     }
 
-    const sortedSlots = activeSlots
-      .map((slot) => ({
-        ...slot,
-        startMinutes: parseTimeToMinutes(slot.startTime) ?? 0,
-        endMinutes: parseTimeToMinutes(slot.endTime) ?? 0,
-      }))
-      .sort((left, right) => left.startMinutes - right.startMinutes);
-
-    for (let index = 1; index < sortedSlots.length; index += 1) {
-      const previousSlot = sortedSlots[index - 1];
-      const currentSlot = sortedSlots[index];
-
-      if (currentSlot.startMinutes < previousSlot.endMinutes) {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        setFeedbackModal({
-          visible: true,
-          title: "Overlapping slots",
-          message: `${previousSlot.label} overlaps with ${currentSlot.label}. Adjust the times so one session does not conflict with another.`,
-          tone: "error",
-        });
-        return;
-      }
+    // 2. Overlap checks
+    const overlapMsg = findOverlappingBlocks(selectedSchedule.blocks);
+    if (overlapMsg) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setFeedbackModal({
+        visible: true,
+        title: "Overlapping blocks",
+        message: `${overlapMsg}. Please adjust the times so blocks do not conflict.`,
+        tone: "error",
+      });
+      return;
     }
 
+    // 3. Save to database
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setSavedDefaultTemplate(cloneTemplate(defaultTemplate));
-    setSavedTemplatesByDate(cloneTemplatesByDate(templatesByDate));
+    setSavedDefaultSchedule(cloneSchedule(defaultSchedule));
+    setSavedSchedulesByDate(cloneSchedulesByDate(schedulesByDate));
+
+    const user = auth?.currentUser;
+    if (user && db) {
+      setDoc(
+        doc(db, "counselors", user.uid),
+        {
+          schedules: schedulesByDate,
+        },
+        { merge: true }
+      ).catch((err) => {
+        console.error("Error saving counselor schedules to Firestore:", err);
+      });
+    }
+
     setFeedbackModal({
       visible: true,
       title: "Availability saved",
-      message: `Your schedule for ${selectedDayEntry.fullDate} has been updated. ${openSlots} slot(s) are currently available.`,
+      message: `Your schedule for ${selectedDayEntry.fullDate} has been updated. Sliced into ${previewSlots.length} slot(s).`,
       tone: "success",
     });
   };
 
+  const shiftWeek = (offset: number) => {
+    setWeekOffset((curr) => curr + offset);
+    void Haptics.selectionAsync();
+  };
+
+  if (isSyncing) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={[styles.screen, { justifyContent: "center", alignItems: "center" }]}>
+          <ActivityIndicator size="large" color="#2F88E8" />
+          <Text style={{ marginTop: 12, fontFamily: "Inter", color: "#6D7686", fontWeight: "600" }}>
+            Loading schedules...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       <View style={styles.screen}>
+        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.headerIcon}
@@ -434,252 +582,323 @@ export default function CounselorScheduleScreen() {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
+          {/* Selecting Day Section */}
           <View style={styles.dayHeader}>
             <View>
-              <Text style={styles.dayHeaderText}>SELECT DAY</Text>
+              <Text style={styles.dayHeaderText}>CHOOSE DATE</Text>
               <Text style={styles.dayHeaderHint}>
-                Choose a date and add as many slots as you need
+                Choose a date and define your working hours
               </Text>
             </View>
             <View style={styles.weekActions}>
               <TouchableOpacity
-                style={styles.weekButton}
+                style={[styles.weekButton, weekOffset <= 0 && { opacity: 0.4 }]}
                 activeOpacity={0.85}
-                onPress={() => {
-                  setWeekOffset((current) => current - 1);
-                  setSelectedDay(WEEKDAY_IDS[0]);
-                  void Haptics.selectionAsync();
-                }}
+                onPress={() => weekOffset > 0 && shiftWeek(-1)}
+                disabled={weekOffset <= 0}
               >
-                <Feather name="chevron-left" size={16} color="#2F88E8" />
-                <Text style={styles.weekButtonText}>Prev</Text>
+                <Feather name="chevron-left" size={18} color={weekOffset <= 0 ? "#8E9AA8" : "#2F88E8"} />
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.weekButton}
+                style={[styles.weekButton, { marginLeft: 6 }]}
                 activeOpacity={0.85}
-                onPress={() => {
-                  setWeekOffset((current) => current + 1);
-                  setSelectedDay(WEEKDAY_IDS[0]);
-                  void Haptics.selectionAsync();
-                }}
+                onPress={() => shiftWeek(1)}
               >
-                <Text style={styles.weekButtonText}>Next</Text>
-                <Feather name="chevron-right" size={16} color="#2F88E8" />
+                <Feather name="chevron-right" size={18} color="#2F88E8" />
               </TouchableOpacity>
             </View>
           </View>
 
+          {/* Week Calendar Row */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.dayRow}
+            contentContainerStyle={styles.calendarRow}
           >
             {displayedDays.map((day) => {
-              const isActive = day.id === selectedDay;
-
+              const isSelected = day.id === selectedDay;
+              const isDisabled = day.isPast;
               return (
                 <TouchableOpacity
                   key={day.id}
-                  style={[styles.dayCard, isActive && styles.dayCardActive]}
-                  activeOpacity={0.85}
+                  style={[
+                    styles.calendarPill,
+                    isSelected && styles.calendarPillActive,
+                    isDisabled && { opacity: 0.35, backgroundColor: "#EBF3FC", borderColor: "#D2DFED" },
+                  ]}
+                  activeOpacity={isDisabled ? 1 : 0.9}
+                  disabled={isDisabled}
                   onPress={() => {
-                    setSelectedDay(day.id);
-                    void Haptics.selectionAsync();
+                    if (!isDisabled) {
+                      setSelectedDay(day.id);
+                      void Haptics.selectionAsync();
+                    }
                   }}
                 >
                   <Text
-                    style={[styles.dayLabel, isActive && styles.dayLabelActive]}
+                    style={[
+                      styles.calendarPillLabel,
+                      isSelected && styles.calendarPillLabelActive,
+                      isDisabled && { color: "#8E9AA8" },
+                    ]}
                   >
                     {day.label}
                   </Text>
                   <Text
-                    style={[styles.dayMonth, isActive && styles.dayMonthActive]}
-                  >
-                    {day.month}
-                  </Text>
-                  <Text
-                    style={[styles.dayDate, isActive && styles.dayDateActive]}
+                    style={[
+                      styles.calendarPillDate,
+                      isSelected && styles.calendarPillDateActive,
+                      isDisabled && { color: "#6D7686" },
+                    ]}
                   >
                     {day.date}
                   </Text>
                   <Text
                     style={[
-                      styles.dayFullDate,
-                      isActive && styles.dayFullDateActive,
+                      styles.calendarPillMonth,
+                      isSelected && styles.calendarPillMonthActive,
+                      isDisabled && { color: "#8E9AA8" },
                     ]}
                   >
-                    {day.fullDate}
+                    {day.month}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
 
+          {/* Info Card */}
           <View style={styles.infoCard}>
             <Feather name="info" size={22} color="#2F88E8" />
             <Text style={styles.infoText}>
-              Morning, afternoon, and evening stay as sections, but you can add
-              multiple time slots under each one and decide whether each slot is
-              available or off. Saved slots cannot overlap with each other.
+              Set your work blocks. The system will automatically slice them into fixed-duration consultation slots for members to book.
             </Text>
           </View>
 
-          {(["morning", "afternoon", "evening"] as const).map((period) => {
-            const meta = PERIOD_META[period];
-            const slots = selectedTemplate[period];
+          {/* Configuration Settings */}
+          <View style={styles.sectionWrap}>
+            <Text style={styles.sectionTitle}>SLOT CONFIGURATION</Text>
+            <Text style={styles.sectionHint}>Define session length and buffer between sessions</Text>
 
-            return (
-              <View key={period} style={styles.sectionWrap}>
-                <View style={styles.sectionHeader}>
-                  <View style={styles.sectionTitleWrap}>
-                    <View
-                      style={[
-                        styles.sectionDot,
-                        { backgroundColor: meta.color },
-                      ]}
-                    />
-                    <View>
-                      <Text style={styles.sectionTitle}>{meta.title}</Text>
-                      <Text style={styles.sectionHint}>{meta.hint}</Text>
-                    </View>
+            <View style={styles.configCard}>
+              <View style={styles.configRow}>
+                <Text style={styles.configLabel}>Session Duration</Text>
+                <View style={styles.pillsRow}>
+                  {DURATION_OPTIONS.map((dur) => {
+                    const isSelected = selectedSchedule.sessionDuration === dur;
+                    return (
+                      <TouchableOpacity
+                        key={dur}
+                        style={[styles.pill, isSelected && styles.pillActive]}
+                        activeOpacity={0.85}
+                        onPress={() => setDuration(dur)}
+                      >
+                        <Text style={[styles.pillText, isSelected && styles.pillTextActive]}>
+                          {dur} min
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View style={[styles.configRow, { marginTop: 16 }]}>
+                <Text style={styles.configLabel}>Buffer Time</Text>
+                <View style={styles.pillsRow}>
+                  {BUFFER_OPTIONS.map((buf) => {
+                    const isSelected = selectedSchedule.bufferTime === buf;
+                    return (
+                      <TouchableOpacity
+                        key={buf}
+                        style={[styles.pill, isSelected && styles.pillActive]}
+                        activeOpacity={0.85}
+                        onPress={() => setBuffer(buf)}
+                      >
+                        <Text style={[styles.pillText, isSelected && styles.pillTextActive]}>
+                          {buf} min
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Time Blocks */}
+          <View style={styles.sectionWrap}>
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>AVAILABILITY BLOCKS</Text>
+                <Text style={styles.sectionHint}>Add work intervals for this day</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.addBlockButton}
+                activeOpacity={0.88}
+                onPress={addTimeBlock}
+              >
+                <Feather name="plus" size={14} color="#2F88E8" />
+                <Text style={styles.addBlockButtonText}>Add Block</Text>
+              </TouchableOpacity>
+            </View>
+
+            {selectedSchedule.blocks.map((block, index) => (
+              <View key={block.id} style={styles.blockCard}>
+                <View style={styles.blockCardHeader}>
+                  <Text style={styles.blockCardTitle}>Block #{index + 1}</Text>
+                  {selectedSchedule.blocks.length > 1 ? (
+                    <TouchableOpacity
+                      style={styles.removeBlockButton}
+                      activeOpacity={0.88}
+                      onPress={() => removeTimeBlock(block.id)}
+                    >
+                      <Feather name="trash-2" size={14} color="#D84C4C" />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+
+                <View style={styles.blockTimeRow}>
+                  <View style={styles.timeFieldWrap}>
+                    <Text style={styles.timeFieldLabel}>Start Time</Text>
+                    <TouchableOpacity
+                      style={styles.timeInputShell}
+                      activeOpacity={0.75}
+                      onPress={() => openTimePicker(block.id, "start", block.start)}
+                    >
+                      <Feather name="clock" size={16} color="#2F88E8" />
+                      <Text style={styles.timeText}>{block.start}</Text>
+                    </TouchableOpacity>
                   </View>
+
+                  <View style={styles.timeFieldWrap}>
+                    <Text style={styles.timeFieldLabel}>End Time</Text>
+                    <TouchableOpacity
+                      style={styles.timeInputShell}
+                      activeOpacity={0.75}
+                      onPress={() => openTimePicker(block.id, "end", block.end)}
+                    >
+                      <Feather name="clock" size={16} color="#2F88E8" />
+                      <Text style={styles.timeText}>{block.end}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          {/* Sliced Slots Preview */}
+          <View style={styles.sectionWrap}>
+            <Text style={styles.sectionTitle}>SLOTS PREVIEW</Text>
+            <Text style={styles.sectionHint}>Real-time generation of bookable slots</Text>
+
+            <View style={styles.previewContainer}>
+              {previewSlots.length === 0 ? (
+                <Text style={styles.emptyPreviewText}>
+                  Choose valid time blocks to view generated slots.
+                </Text>
+              ) : (
+                <View style={styles.slotsGrid}>
+                  {previewSlots.map((slot, idx) => (
+                    <View key={idx} style={styles.previewBadge}>
+                      <Feather name="calendar" size={11} color="#6B7280" style={{ marginRight: 4 }} />
+                      <Text style={styles.previewBadgeText}>
+                        {slot.startTime} - {slot.endTime}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
+        </ScrollView>
+
+        {/* Bottom Save Bar */}
+        <View style={styles.bottomPanel}>
+          <View style={styles.capacityWrap}>
+            <Text style={styles.capacityLabel}>TOTAL SLOTS</Text>
+            <Text style={styles.capacityValue}>
+              {previewSlots.length} Bookable Session(s)
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.saveButton, !hasUnsavedChanges && { opacity: 0.85 }]}
+            activeOpacity={0.88}
+            onPress={handleSave}
+          >
+            <Text style={styles.saveButtonText}>Save Availability</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Time Picker Component */}
+        {Platform.OS === "android" && timePickerConfig.visible && (
+          <DateTimePicker
+            value={pickerDate}
+            mode="time"
+            is24Hour={false}
+            display="clock"
+            onChange={handleTimeChange}
+          />
+        )}
+
+        {Platform.OS === "ios" && (
+          <Modal
+            visible={timePickerConfig.visible}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setTimePickerConfig((prev) => ({ ...prev, visible: false }))}
+          >
+            <View style={styles.pickerOverlay}>
+              <Pressable
+                style={styles.pickerBackdrop}
+                onPress={() => setTimePickerConfig((prev) => ({ ...prev, visible: false }))}
+              />
+              <View style={styles.pickerSheet}>
+                <View style={styles.pickerHeader}>
+                  <Text style={styles.pickerTitle}>
+                    CHOOSE {timePickerConfig.field.toUpperCase()} TIME
+                  </Text>
                   <TouchableOpacity
-                    style={styles.addSlotButton}
-                    activeOpacity={0.88}
-                    onPress={() => addSlot(period)}
+                    style={styles.pickerCloseButton}
+                    onPress={() => setTimePickerConfig((prev) => ({ ...prev, visible: false }))}
                   >
-                    <Feather name="plus" size={14} color="#2F88E8" />
-                    <Text style={styles.addSlotButtonText}>Add Slot</Text>
+                    <Feather name="x" size={20} color="#64748B" />
                   </TouchableOpacity>
                 </View>
 
-                {slots.map((slot, index) => (
-                  <View
-                    key={slot.id}
-                    style={[styles.slotCard, !slot.isAvailable && styles.slotCardOff]}
-                  >
-                    <View style={styles.slotCardHeader}>
-                      <Text style={styles.slotCardTitle}>Slot {index + 1}</Text>
-                      <View style={styles.slotHeaderActions}>
-                        <TouchableOpacity
-                          style={[
-                            styles.slotToggle,
-                            slot.isAvailable
-                              ? styles.slotToggleOn
-                              : styles.slotToggleOff,
-                          ]}
-                          activeOpacity={0.88}
-                          onPress={() =>
-                            applySlotChange(period, slot.id, {
-                              isAvailable: !slot.isAvailable,
-                            })
-                          }
-                        >
-                          <Text
-                            style={[
-                              styles.slotToggleText,
-                              slot.isAvailable
-                                ? styles.slotToggleTextOn
-                                : styles.slotToggleTextOff,
-                            ]}
-                          >
-                            {slot.isAvailable ? "Available" : "Off"}
-                          </Text>
-                        </TouchableOpacity>
+                <View style={styles.pickerClockWrapper}>
+                  <DateTimePicker
+                    value={pickerDate}
+                    mode="time"
+                    display="spinner"
+                    is24Hour={false}
+                    onChange={handleTimeChange}
+                    style={styles.iosDatePicker}
+                  />
+                </View>
 
-                        {slots.length > 1 ? (
-                          <TouchableOpacity
-                            style={styles.removeSlotButton}
-                            activeOpacity={0.88}
-                            onPress={() => removeSlot(period, slot.id)}
-                          >
-                            <Feather name="trash-2" size={14} color="#D84C4C" />
-                          </TouchableOpacity>
-                        ) : null}
-                      </View>
-                    </View>
-
-                    <View style={styles.slotTimeRow}>
-                      <View style={styles.timeFieldWrap}>
-                        <Text style={styles.timeFieldLabel}>Start Time</Text>
-                        <View style={styles.timeInputShell}>
-                          <Feather name="clock" size={16} color="#7C8694" />
-                          <TextInput
-                            style={styles.timeInput}
-                            value={slot.startTime}
-                            onChangeText={(value) =>
-                              applySlotChange(period, slot.id, {
-                                startTime: value,
-                              })
-                            }
-                            placeholder="08:00 AM"
-                            placeholderTextColor="#A0A8B5"
-                          />
-                        </View>
-                      </View>
-
-                      <View style={styles.timeFieldWrap}>
-                        <Text style={styles.timeFieldLabel}>End Time</Text>
-                        <View style={styles.timeInputShell}>
-                          <Feather name="clock" size={16} color="#7C8694" />
-                          <TextInput
-                            style={styles.timeInput}
-                            value={slot.endTime}
-                            onChangeText={(value) =>
-                              applySlotChange(period, slot.id, {
-                                endTime: value,
-                              })
-                            }
-                            placeholder="09:00 AM"
-                            placeholderTextColor="#A0A8B5"
-                          />
-                        </View>
-                      </View>
-                    </View>
-
-                    <View style={styles.slotFooter}>
-                      <Text style={styles.slotFooterLabel}>Current Range</Text>
-                      <Text style={styles.slotFooterValue}>
-                        {slot.startTime || "--"} - {slot.endTime || "--"}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
+                <TouchableOpacity
+                  style={styles.pickerConfirmButton}
+                  activeOpacity={0.85}
+                  onPress={confirmIosTime}
+                >
+                  <Text style={styles.pickerConfirmButtonText}>Confirm Time</Text>
+                </TouchableOpacity>
               </View>
-            );
-          })}
-        </ScrollView>
-
-        {hasUnsavedChanges ? (
-          <View style={styles.bottomPanel}>
-            <View style={styles.capacityWrap}>
-              <Text style={styles.capacityLabel}>TOTAL AVAILABILITY</Text>
-              <Text style={styles.capacityValue}>{openSlots} Slots Open</Text>
             </View>
-            <TouchableOpacity
-              style={styles.saveButton}
-              activeOpacity={0.88}
-              onPress={handleSave}
-            >
-              <Text style={styles.saveButtonText}>Save Changes</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
+          </Modal>
+        )}
 
+        {/* Feedback Popup Modal */}
         <Modal
           visible={feedbackModal.visible}
           transparent
           animationType="fade"
-          onRequestClose={() =>
-            setFeedbackModal((current) => ({ ...current, visible: false }))
-          }
+          onRequestClose={() => setFeedbackModal((prev) => ({ ...prev, visible: false }))}
         >
           <View style={styles.modalOverlay}>
             <Pressable
               style={styles.modalBackdrop}
-              onPress={() =>
-                setFeedbackModal((current) => ({ ...current, visible: false }))
-              }
+              onPress={() => setFeedbackModal((prev) => ({ ...prev, visible: false }))}
             />
             <View style={styles.confirmSheet}>
               <View
@@ -689,27 +908,22 @@ export default function CounselorScheduleScreen() {
                 ]}
               >
                 <Feather
-                  name={feedbackModal.tone === "error" ? "alert-circle" : "check"}
-                  size={24}
+                  name={feedbackModal.tone === "error" ? "alert-circle" : "check-circle"}
+                  size={28}
                   color={feedbackModal.tone === "error" ? "#D84C4C" : "#2F88E8"}
                 />
               </View>
               <Text style={styles.confirmTitle}>{feedbackModal.title}</Text>
               <Text style={styles.confirmText}>{feedbackModal.message}</Text>
-
               <TouchableOpacity
                 style={[
                   styles.confirmPrimaryButton,
                   feedbackModal.tone === "error" && styles.confirmPrimaryButtonError,
                 ]}
-                activeOpacity={0.9}
-                onPress={() =>
-                  setFeedbackModal((current) => ({ ...current, visible: false }))
-                }
+                activeOpacity={0.85}
+                onPress={() => setFeedbackModal((prev) => ({ ...prev, visible: false }))}
               >
-                <Text style={styles.confirmPrimaryText}>
-                  {feedbackModal.tone === "error" ? "Fix Times" : "Done"}
-                </Text>
+                <Text style={styles.confirmPrimaryText}>OK</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -718,11 +932,6 @@ export default function CounselorScheduleScreen() {
     </SafeAreaView>
   );
 }
-
-const cloneTemplatesByDate = (templates: Record<string, DayTemplate>) =>
-  Object.fromEntries(
-    Object.entries(templates).map(([date, template]) => [date, cloneTemplate(template)]),
-  );
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -734,302 +943,296 @@ const styles = StyleSheet.create({
     backgroundColor: "#F4F6F8",
   },
   header: {
-    height: 64,
-    paddingHorizontal: 16,
+    height: 52,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    paddingHorizontal: 16,
+    backgroundColor: "#FFFFFF",
   },
   headerIcon: {
-    width: 32,
-    height: 32,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     justifyContent: "center",
     alignItems: "center",
   },
   headerTitle: {
     fontFamily: "Inter",
-    fontSize: 18,
-    lineHeight: 22,
-    color: "#111B2E",
+    fontSize: 16,
+    lineHeight: 20,
+    color: "#1B2536",
     fontWeight: "800",
+    letterSpacing: 0.6,
   },
   headerSpacer: {
-    width: 32,
-    height: 32,
+    width: 38,
   },
   headerDivider: {
     height: 1,
-    backgroundColor: "#DEE2E9",
+    backgroundColor: "#E4E8ED",
   },
   content: {
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 164,
-    gap: 14,
+    paddingTop: 18,
+    paddingBottom: 140,
   },
   dayHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
   },
   dayHeaderText: {
     fontFamily: "Inter",
-    fontSize: 14,
-    lineHeight: 18,
-    color: "#727D8E",
+    fontSize: 12,
+    lineHeight: 16,
+    color: "#6D7686",
     fontWeight: "800",
+    letterSpacing: 0.5,
   },
   dayHeaderHint: {
-    fontFamily: "Inter",
-    fontSize: 12,
-    lineHeight: 17,
-    color: "#8A93A3",
-    fontWeight: "500",
-    marginTop: 4,
-    maxWidth: 190,
-  },
-  weekActions: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  weekButton: {
-    height: 38,
-    borderRadius: 19,
-    paddingHorizontal: 12,
-    backgroundColor: "#EAF3FE",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  weekButtonText: {
-    fontFamily: "Inter",
-    fontSize: 13,
-    lineHeight: 16,
-    color: "#2F88E8",
-    fontWeight: "700",
-  },
-  dayRow: {
-    gap: 10,
-    paddingRight: 10,
-  },
-  dayCard: {
-    width: 108,
-    minHeight: 152,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#D7DDE7",
-    backgroundColor: "#F7F9FB",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-  },
-  dayCardActive: {
-    backgroundColor: "#2F88E8",
-    borderColor: "#2F88E8",
-    shadowColor: "#2F88E8",
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-  },
-  dayLabel: {
-    fontFamily: "Inter",
-    fontSize: 15,
-    lineHeight: 18,
-    color: "#6E7788",
-    fontWeight: "800",
-  },
-  dayLabelActive: {
-    color: "#FFFFFF",
-  },
-  dayMonth: {
-    fontFamily: "Inter",
-    fontSize: 12,
-    lineHeight: 15,
-    color: "#8A93A3",
-    fontWeight: "700",
-    letterSpacing: 0.6,
-  },
-  dayMonthActive: {
-    color: "#DCEBFF",
-  },
-  dayDate: {
-    fontFamily: "Inter",
-    fontSize: 34,
-    lineHeight: 40,
-    color: "#111B2E",
-    fontWeight: "800",
-  },
-  dayDateActive: {
-    color: "#FFFFFF",
-  },
-  dayFullDate: {
-    marginTop: 4,
-    textAlign: "center",
+    marginTop: 2,
     fontFamily: "Inter",
     fontSize: 11,
     lineHeight: 15,
-    color: "#758092",
+    color: "#8E9AA8",
     fontWeight: "500",
-    paddingHorizontal: 8,
   },
-  dayFullDateActive: {
-    color: "#DCEBFF",
+  weekActions: {
+    flexDirection: "row",
+  },
+  weekButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#D2DFED",
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  calendarRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    gap: 8,
+    paddingBottom: 8,
+    marginBottom: 8,
+  },
+  calendarPill: {
+    width: 76,
+    height: 94,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  calendarPillActive: {
+    borderColor: "#2F88E8",
+    backgroundColor: "#2F88E8",
+    shadowColor: "#2F88E8",
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
+  calendarPillLabel: {
+    fontFamily: "Inter",
+    fontSize: 10,
+    lineHeight: 13,
+    color: "#7E8A9A",
+    fontWeight: "700",
+  },
+  calendarPillLabelActive: {
+    color: "#D0E7FF",
+  },
+  calendarPillDate: {
+    marginTop: 5,
+    fontFamily: "Inter",
+    fontSize: 20,
+    lineHeight: 24,
+    color: "#1F2937",
+    fontWeight: "800",
+  },
+  calendarPillDateActive: {
+    color: "#FFFFFF",
+  },
+  calendarPillMonth: {
+    marginTop: 4,
+    fontFamily: "Inter",
+    fontSize: 9,
+    lineHeight: 12,
+    color: "#7E8A9A",
+    fontWeight: "700",
+  },
+  calendarPillMonthActive: {
+    color: "#D0E7FF",
   },
   infoCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#C9DEFA",
-    backgroundColor: "#EAF3FF",
-    padding: 16,
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
+    borderRadius: 16,
+    backgroundColor: "#EBF5FF",
+    borderWidth: 1,
+    borderColor: "#CFE6FD",
+    padding: 14,
+    gap: 10,
+    alignItems: "center",
+    marginBottom: 20,
   },
   infoText: {
     flex: 1,
     fontFamily: "Inter",
-    fontSize: 14,
-    lineHeight: 22,
-    color: "#244CAD",
-    fontWeight: "500",
+    fontSize: 11,
+    lineHeight: 16,
+    color: "#2C63AC",
+    fontWeight: "600",
   },
   sectionWrap: {
-    gap: 10,
+    marginBottom: 20,
   },
   sectionHeader: {
-    marginTop: 4,
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center",
-  },
-  sectionTitleWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    flex: 1,
-    paddingRight: 12,
-  },
-  sectionDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    marginBottom: 12,
   },
   sectionTitle: {
     fontFamily: "Inter",
-    fontSize: 16,
-    lineHeight: 20,
-    color: "#1A2231",
+    fontSize: 13,
+    lineHeight: 17,
+    color: "#1E2530",
     fontWeight: "800",
+    letterSpacing: 0.4,
   },
   sectionHint: {
-    marginTop: 2,
+    marginTop: 1,
     fontFamily: "Inter",
-    fontSize: 12,
-    lineHeight: 17,
-    color: "#7A8494",
+    fontSize: 11,
+    lineHeight: 15,
+    color: "#7E8A9A",
     fontWeight: "500",
   },
-  addSlotButton: {
-    height: 36,
-    borderRadius: 18,
-    paddingHorizontal: 12,
-    backgroundColor: "#EAF3FE",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  addSlotButtonText: {
-    fontFamily: "Inter",
-    fontSize: 12,
-    lineHeight: 15,
-    color: "#2F88E8",
-    fontWeight: "800",
-  },
-  slotCard: {
+  configCard: {
+    marginTop: 10,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#CFE0F8",
+    borderColor: "#E2E8F0",
     backgroundColor: "#FFFFFF",
-    padding: 14,
-    gap: 14,
+    padding: 16,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
   },
-  slotCardOff: {
-    borderColor: "#E2E6ED",
-    backgroundColor: "#F6F8FB",
-  },
-  slotCardHeader: {
+  configRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  slotCardTitle: {
+  configLabel: {
     fontFamily: "Inter",
-    fontSize: 15,
-    lineHeight: 19,
-    color: "#1A2231",
-    fontWeight: "800",
+    fontSize: 13,
+    color: "#334155",
+    fontWeight: "700",
+    marginRight: 6,
   },
-  slotHeaderActions: {
+  pillsRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    gap: 6,
   },
-  slotToggle: {
-    minWidth: 88,
-    height: 34,
-    borderRadius: 17,
-    justifyContent: "center",
-    alignItems: "center",
+  pill: {
     paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
   },
-  slotToggleOn: {
-    backgroundColor: "#E7F1FE",
+  pillActive: {
+    borderColor: "#2F88E8",
+    backgroundColor: "#EBF5FF",
   },
-  slotToggleOff: {
-    backgroundColor: "#ECEFF4",
-  },
-  slotToggleText: {
+  pillText: {
     fontFamily: "Inter",
     fontSize: 11,
-    lineHeight: 14,
+    color: "#64748B",
+    fontWeight: "600",
+  },
+  pillTextActive: {
+    color: "#2F88E8",
+    fontWeight: "700",
+  },
+  addBlockButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: "#EBF5FF",
+  },
+  addBlockButtonText: {
+    fontFamily: "Inter",
+    fontSize: 11,
+    color: "#2F88E8",
+    fontWeight: "700",
+  },
+  blockCard: {
+    marginTop: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+  },
+  blockCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  blockCardTitle: {
+    fontFamily: "Inter",
+    fontSize: 14,
+    color: "#0F172A",
     fontWeight: "800",
   },
-  slotToggleTextOn: {
-    color: "#2F88E8",
-  },
-  slotToggleTextOff: {
-    color: "#8A93A3",
-  },
-  removeSlotButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "#FDEEEE",
+  removeBlockButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#FEF2F2",
     justifyContent: "center",
     alignItems: "center",
   },
-  slotTimeRow: {
+  blockTimeRow: {
     flexDirection: "row",
     gap: 12,
   },
   timeFieldWrap: {
     flex: 1,
-    gap: 6,
+    gap: 4,
   },
   timeFieldLabel: {
     fontFamily: "Inter",
-    fontSize: 12,
-    lineHeight: 16,
-    color: "#7A8494",
+    fontSize: 11,
+    color: "#64748B",
     fontWeight: "700",
   },
   timeInputShell: {
-    height: 48,
-    borderRadius: 14,
+    height: 46,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#D9E1EB",
-    backgroundColor: "#FBFCFE",
+    borderColor: "#CBD5E1",
+    backgroundColor: "#F8FAFC",
     paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
@@ -1038,41 +1241,55 @@ const styles = StyleSheet.create({
   timeInput: {
     flex: 1,
     fontFamily: "Inter",
-    fontSize: 14,
-    lineHeight: 18,
-    color: "#1A2231",
+    fontSize: 13,
+    color: "#0F172A",
     fontWeight: "600",
   },
-  slotFooter: {
-    borderRadius: 14,
-    backgroundColor: "#F4F7FB",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 4,
+  previewContainer: {
+    marginTop: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+    padding: 14,
   },
-  slotFooterLabel: {
+  emptyPreviewText: {
     fontFamily: "Inter",
     fontSize: 11,
-    lineHeight: 14,
-    color: "#8A93A3",
-    fontWeight: "700",
-    letterSpacing: 0.4,
+    color: "#94A3B8",
+    fontWeight: "500",
+    textAlign: "center",
+    paddingVertical: 12,
   },
-  slotFooterValue: {
+  slotsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  previewBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  previewBadgeText: {
     fontFamily: "Inter",
-    fontSize: 15,
-    lineHeight: 20,
-    color: "#1A2231",
-    fontWeight: "800",
+    fontSize: 10,
+    color: "#475569",
+    fontWeight: "600",
   },
   bottomPanel: {
     position: "absolute",
     left: 0,
     right: 0,
-    bottom: 62,
+    bottom: 0,
     borderTopWidth: 1,
     borderTopColor: "#DEE2E9",
-    backgroundColor: "#F4F6F8",
+    backgroundColor: "#FFFFFF",
     paddingHorizontal: 16,
     paddingVertical: 14,
     flexDirection: "row",
@@ -1080,47 +1297,39 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   capacityWrap: {
-    gap: 4,
+    gap: 2,
   },
   capacityLabel: {
     fontFamily: "Inter",
-    fontSize: 12,
-    lineHeight: 16,
-    color: "#6D7686",
+    fontSize: 10,
+    color: "#64748B",
     fontWeight: "800",
     letterSpacing: 0.3,
   },
   capacityValue: {
     fontFamily: "Inter",
-    fontSize: 14,
-    lineHeight: 18,
-    color: "#151D2C",
+    fontSize: 13,
+    color: "#0F172A",
     fontWeight: "800",
   },
   saveButton: {
-    height: 52,
-    borderRadius: 26,
-    paddingHorizontal: 24,
+    height: 46,
+    borderRadius: 23,
+    paddingHorizontal: 22,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#2F88E8",
-    shadowColor: "#2F88E8",
-    shadowOpacity: 0.26,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
   },
   saveButtonText: {
     fontFamily: "Inter",
-    fontSize: 16,
-    lineHeight: 20,
+    fontSize: 14,
     color: "#FFFFFF",
     fontWeight: "800",
   },
   modalOverlay: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(15, 23, 42, 0.28)",
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
   },
   modalBackdrop: {
     flex: 1,
@@ -1133,29 +1342,23 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 28,
     alignItems: "center",
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.18,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: -6 },
-    elevation: 14,
   },
   confirmIconWrap: {
     width: 56,
     height: 56,
-    borderRadius: 18,
-    backgroundColor: "#EAF3FE",
+    borderRadius: 28,
+    backgroundColor: "#EBF5FF",
     justifyContent: "center",
     alignItems: "center",
   },
   confirmIconWrapError: {
-    backgroundColor: "#FDEEEE",
+    backgroundColor: "#FEF2F2",
   },
   confirmTitle: {
     marginTop: 16,
     fontFamily: "Inter",
-    fontSize: 22,
-    lineHeight: 27,
-    color: "#172133",
+    fontSize: 20,
+    color: "#0F172A",
     fontWeight: "800",
     textAlign: "center",
   },
@@ -1163,27 +1366,94 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: "center",
     fontFamily: "Inter",
-    fontSize: 14,
-    lineHeight: 20,
-    color: "#728096",
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#64748B",
     fontWeight: "500",
   },
   confirmPrimaryButton: {
     marginTop: 22,
     width: "100%",
-    height: 48,
-    borderRadius: 14,
+    height: 46,
+    borderRadius: 12,
     backgroundColor: "#2F88E8",
     justifyContent: "center",
     alignItems: "center",
   },
   confirmPrimaryButtonError: {
-    backgroundColor: "#D84C4C",
+    backgroundColor: "#EF4444",
   },
   confirmPrimaryText: {
     fontFamily: "Inter",
-    fontSize: 15,
-    lineHeight: 19,
+    fontSize: 14,
+    color: "#FFFFFF",
+    fontWeight: "800",
+  },
+  timeText: {
+    fontFamily: "Inter",
+    fontSize: 13,
+    color: "#0F172A",
+    fontWeight: "600",
+  },
+  pickerOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+  },
+  pickerBackdrop: {
+    flex: 1,
+  },
+  pickerSheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    backgroundColor: "#FFFFFF",
+    maxHeight: "65%",
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 34,
+  },
+  pickerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  pickerTitle: {
+    fontFamily: "Inter",
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#1E2530",
+    letterSpacing: 0.5,
+  },
+  pickerCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#F1F5F9",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pickerClockWrapper: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+  },
+  iosDatePicker: {
+    width: "100%",
+    height: 200,
+  },
+  pickerConfirmButton: {
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: "#2F88E8",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 18,
+  },
+  pickerConfirmButtonText: {
+    fontFamily: "Inter",
+    fontSize: 14,
     color: "#FFFFFF",
     fontWeight: "800",
   },
