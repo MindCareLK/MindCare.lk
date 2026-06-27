@@ -1,14 +1,15 @@
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { StatusBar, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { StatusBar, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/components/AuthContext';
 import { addCounselorNotification } from '@/components/notification-store';
 import { RescheduleModal, type RescheduleSession } from '@/components/RescheduleModal';
 import { CancelSessionModal } from '@/components/CancelSessionModal';
 import { isSessionNear, removeBookedSession, updateBookedSession, useBookedSessions } from '@/components/session-store';
-import { getMemberProfile } from '@/lib/members';
+import { getMemberProfile, upsertMemberProfile } from '@/lib/members';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -72,10 +73,12 @@ const personalInfo: InfoField[] = [
   {
     id: 'gender',
     label: 'Gender',
+    icon: 'users',
   },
   {
     id: 'dob',
     label: 'Date of Birth',
+    icon: 'calendar',
   },
 ];
 
@@ -97,6 +100,39 @@ function InfoFieldCard({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  const handlePress = () => {
+    if (!isEditing) return;
+
+    if (field.id === 'gender') {
+      Alert.alert(
+        'Select Gender',
+        'Choose your gender:',
+        [
+          { text: 'Male', onPress: () => onChange('Male') },
+          { text: 'Female', onPress: () => onChange('Female') },
+          { text: 'Prefer not to say', onPress: () => onChange('Prefer not to say') },
+          { text: 'Cancel', style: 'cancel' },
+        ],
+        { cancelable: true }
+      );
+    } else if (field.id === 'dob') {
+      setShowDatePicker(true);
+    }
+  };
+
+  const parseDobString = (dobStr: string): Date => {
+    if (!dobStr || dobStr.startsWith('Add') || dobStr.startsWith('Select')) return new Date(2000, 0, 1);
+    const parsed = new Date(dobStr);
+    return isNaN(parsed.getTime()) ? new Date(2000, 0, 1) : parsed;
+  };
+
+  const formatDob = (date: Date) =>
+    date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+  const isSelectableField = field.id === 'gender' || field.id === 'dob';
+
   return (
     <View style={[styles.infoCard, field.fullWidth && styles.infoCardFull]}>
       {field.icon ? (
@@ -108,17 +144,51 @@ function InfoFieldCard({
       <View style={styles.infoTextBlock}>
         <Text style={styles.infoLabel}>{field.label}</Text>
         {isEditing ? (
-          <TextInput
-            value={value}
-            onChangeText={onChange}
-            style={styles.infoInput}
-            placeholder={field.label}
-            placeholderTextColor="#AAB5C2"
-          />
+          isSelectableField ? (
+            <TouchableOpacity onPress={handlePress} activeOpacity={0.7} style={styles.selectableContainer}>
+              <Text style={[styles.infoValue, { color: value.startsWith('Add') || value.startsWith('Select') ? '#AAB5C2' : '#151A21' }]}>
+                {value}
+              </Text>
+              <Feather 
+                name={field.id === 'dob' ? 'calendar' : 'chevron-down'} 
+                size={14} 
+                color="#7EB5F5" 
+                style={{ marginLeft: 4 }} 
+              />
+            </TouchableOpacity>
+          ) : (
+            <TextInput
+              value={value}
+              onChangeText={onChange}
+              style={styles.infoInput}
+              placeholder={field.label}
+              placeholderTextColor="#AAB5C2"
+            />
+          )
         ) : (
           <Text style={styles.infoValue}>{value}</Text>
         )}
       </View>
+
+      {showDatePicker && (
+        <DateTimePicker
+          value={parseDobString(value)}
+          mode="date"
+          display="default"
+          maximumDate={new Date()}
+          onValueChange={(event, selectedDate) => {
+            if (Platform.OS === 'android') {
+              setShowDatePicker(false);
+            }
+            if (selectedDate) {
+              onChange(formatDob(selectedDate));
+            }
+          }}
+          onDismiss={() => {
+            setShowDatePicker(false);
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -262,9 +332,24 @@ export default function ProfilePage() {
 
   const handleEditPress = () => {
     if (isEditing) {
-      setProfile(draftProfile);
-      setMemberProfile(draftProfile);
-      setIsEditing(false);
+      if (!currentUser) {
+        Alert.alert('Sign In Required', 'Please sign in to update your profile.');
+        return;
+      }
+      void (async () => {
+        try {
+          await upsertMemberProfile(currentUser.uid, draftProfile.email, {
+            name: draftProfile.name,
+            gender: draftProfile.gender,
+            dob: draftProfile.dob,
+          });
+          setProfile(draftProfile);
+          setMemberProfile(draftProfile);
+          setIsEditing(false);
+        } catch (error) {
+          Alert.alert('Save Failed', 'Unable to save your profile details. Please try again.');
+        }
+      })();
       return;
     }
 
@@ -1242,5 +1327,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#2F88E8',
+  },
+  selectableContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+    paddingVertical: 2,
   },
 });

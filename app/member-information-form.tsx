@@ -1,9 +1,8 @@
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Platform } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuthContext } from '@/components/AuthContext';
@@ -134,9 +133,14 @@ export default function CounselorRegisterScreen() {
                 mode="date"
                 display="spinner"
                 maximumDate={new Date()}
-                onChange={(event, selectedDate) => {
-                  setShowDatePicker(false);
+                onValueChange={(event, selectedDate) => {
+                  if (Platform.OS === 'android') {
+                    setShowDatePicker(false);
+                  }
                   if (selectedDate) setDob(selectedDate);
+                }}
+                onDismiss={() => {
+                  setShowDatePicker(false);
                 }}
               />
             )}
