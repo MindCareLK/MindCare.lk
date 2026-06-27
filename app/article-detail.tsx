@@ -164,16 +164,11 @@ export default function ArticleDetailScreen() {
   const [article, setArticle] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  const coverImages = [
-    require("../assets/images/How Social Media Affects Mental Health.png"),
-    require("../assets/images/The Global State of Mental Health.png"),
-    require("../assets/images/Understanding Anxiety in Daily Life.png"),
-    require("../assets/images/Understanding Major Depressive Disorder.png"),
-  ];
+  const fallbackImage = require("../assets/images/ArticleBackground.png");
 
   const coverImageSource = image
     ? { uri: decodeURIComponent(image as string) }
-    : (imageIndex !== undefined && Number(imageIndex) >= 0 ? coverImages[Number(imageIndex) % coverImages.length] : null);
+    : fallbackImage;
 
   useEffect(() => {
     const fetchSingleArticle = async () => {

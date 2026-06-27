@@ -30,27 +30,23 @@ export default function ArticlesScreen() {
     fetchArticles();
   }, []);
 
-  const coverImages = [
-    require("../assets/images/How Social Media Affects Mental Health.png"),
-    require("../assets/images/The Global State of Mental Health.png"),
-    require("../assets/images/Understanding Anxiety in Daily Life.png"),
-    require("../assets/images/Understanding Major Depressive Disorder.png"),
-  ];
+  const fallbackImage = require("../assets/images/ArticleBackground.png");
 
   const fetchArticles = async () => {
     try {
       const data = await getArticles();
+      const articlesArray = Array.isArray(data) ? data : data?.items || [];
 
-      const formatted: ReadCard[] = data.map((item: any, index: number) => {
+      const formatted: ReadCard[] = articlesArray.map((item: any) => {
         const bloggerImage = extractArticleImage(item);
         return {
           id: item.id,
           category: "BLOG",
-          title: item.title.replace(/<[^>]+>/g, ""),
+          title: item.title ? item.title.replace(/<[^>]+>/g, "") : "Untitled",
           author: item.author?.displayName || "Admin",
           minutes: "5 min read",
-          image: bloggerImage ? { uri: bloggerImage } : coverImages[index % coverImages.length],
-          imageIndex: bloggerImage ? -1 : index % coverImages.length,
+          image: bloggerImage ? { uri: bloggerImage } : fallbackImage,
+          imageIndex: -1,
           remoteImageUrl: bloggerImage || undefined,
         };
       });

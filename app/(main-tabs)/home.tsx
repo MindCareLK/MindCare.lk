@@ -40,7 +40,7 @@ type ReadCard = {
   image: any;
   imageIndex: number;
   remoteImageUrl?: string;
-  labels: string[];
+  moods: string[];
 };
 
 const extractArticleImage = (item: any) => {
@@ -165,35 +165,45 @@ export default function HomePage() {
   const fetchArticles = async () => {
     try {
       const data = await getArticles();
+      const articlesArray = Array.isArray(data) ? data : data?.items || [];
+      
+      console.log(`Successfully fetched ${articlesArray.length} articles from Blogger`);
 
+      const fallbackImage = require("../../assets/images/ArticleBackground.png");
 
-    const coverImages = [
-      require("../../assets/images/How Social Media Affects Mental Health.png"),
-      require("../../assets/images/The Global State of Mental Health.png"),
-      require("../../assets/images/Understanding Anxiety in Daily Life.png"),
-      require("../../assets/images/Understanding Major Depressive Disorder.png"),
-    ];
+      const validMoods = ["happy", "calm", "manic", "angry", "sad"];
 
-      const formatted: ReadCard[] = data?.map((item: any, index: number) => {
+      const formatted: ReadCard[] = articlesArray.map((item: any) => {
+        const rawLabels = item.labels || [];
+        const lowercaseLabels = rawLabels.map((l: any) => String(l).toLowerCase().trim());
+        const matchedMoods = lowercaseLabels.filter((label: string) => validMoods.includes(label));
         const bloggerImage = extractArticleImage(item);
+
         return {
           id: item.id,
           category: item.labels && item.labels.length > 0 ? item.labels[0].toUpperCase() : "BLOG",
-          title: item.title.replace(/<[^>]+>/g, ""),
+          title: item.title ? item.title.replace(/<[^>]+>/g, "") : "Untitled",
           author: item.author?.displayName || "Admin",
           minutes: "5 min read",
-          image: bloggerImage ? { uri: bloggerImage } : coverImages[index % coverImages.length],
-          imageIndex: bloggerImage ? -1 : index % coverImages.length,
+          image: bloggerImage ? { uri: bloggerImage } : fallbackImage,
+          imageIndex: -1,
           remoteImageUrl: bloggerImage || undefined,
-          labels: item.labels || [],
+          moods: matchedMoods.length > 0 ? matchedMoods : validMoods,
         };
       });
 
-      setReads(formatted || []);
+      console.log("FORMATTED MOODS FOR FIRST ARTICLE:", formatted[0]?.moods);
+      setReads(formatted);
+      
     } catch (error) {
-      console.log("API Error:", error);
+      console.log("API Error in fetchArticles:", error);
     }
   };
+
+  const filteredReads = reads.filter((article) =>
+    article.moods.includes(selectedMood)
+  ).slice(0, 3);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar
@@ -300,20 +310,12 @@ export default function HomePage() {
 
           <Text style={styles.readsTitle}>Mindful Reads</Text>
 
-          {(() => {
-            const filtered = reads.filter((item) =>
-              item.labels.some((l) => l.toLowerCase() === selectedMood.toLowerCase())
-            ).slice(0, 3);
-
-            if (filtered.length === 0) {
-              return (
-                <View style={styles.noReadsWrap}>
-                  <Text style={styles.noReadsText}>No wellness articles found for this mood.</Text>
-                </View>
-              );
-            }
-
-            return filtered.map((item) => (
+          {filteredReads.length === 0 ? (
+            <View style={styles.noReadsWrap}>
+              <Text style={styles.noReadsText}>No wellness articles found for this mood.</Text>
+            </View>
+          ) : (
+            filteredReads.map((item) => (
               <TouchableOpacity
                 style={styles.readCard}
                 key={item.id}
@@ -346,8 +348,8 @@ export default function HomePage() {
                   </View>
                 </View>
               </TouchableOpacity>
-            ));
-          })()}
+            ))
+          )}
 
           <TouchableOpacity
             style={styles.moreButton}
