@@ -22,38 +22,56 @@ export const getArticles = async () => {
   }
 
   try {
+    // 1. Fetch live articles from Blogger API
+    let bloggerItems = [];
+    try {
+      const response = await axios.get(
+        `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts?key=${API_KEY}`
+      );
+      bloggerItems = response.data.items || [];
+    } catch (e) {
+      console.warn("Failed to fetch from Blogger API:", e);
+    }
+
+    // 2. Fetch all articles from Firestore
     const snap = await getDocs(collection(db, "articles"));
-    if (snap.docs.length > 0) {
-      // Sort articles by published date descending
-      return snap.docs.map(d => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => new Date(b.published).getTime() - new Date(a.published).getTime());
-    }
+    const firestoreItems = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    // Seed Firestore with Blogger articles if empty
-    const response = await axios.get(
-      `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts?key=${API_KEY}`
-    );
-    const items = response.data.items || [];
+    // 3. Merge them (Blogger API is source of truth for content/images, Firestore for custom articles or edits)
+    const mergedMap = new Map();
 
-    for (const item of items) {
-      await setDoc(doc(db, "articles", item.id), {
-        title: item.title,
-        content: item.content || "",
-        published: item.published || new Date().toISOString(),
-        author: {
-          displayName: item.author?.displayName || 'Admin'
-        },
-        labels: item.labels || ['General'],
-      });
-    }
+    firestoreItems.forEach(item => {
+      mergedMap.set(item.id, item);
+    });
 
-    return items;
+    bloggerItems.forEach(item => {
+      const existing = mergedMap.get(item.id);
+      if (existing) {
+        mergedMap.set(item.id, {
+          ...existing,
+          title: item.title,
+          content: item.content || "",
+          published: item.published || existing.published,
+          images: item.images,
+          labels: item.labels || existing.labels,
+        });
+      } else {
+        mergedMap.set(item.id, item);
+      }
+    });
+
+    const mergedList = Array.from(mergedMap.values());
+    return mergedList.sort((a, b) => new Date(b.published).getTime() - new Date(a.published).getTime());
   } catch (error) {
     console.error("Error in getArticles:", error);
-    const response = await axios.get(
-      `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts?key=${API_KEY}`
-    );
-    return response.data.items || [];
+    try {
+      const response = await axios.get(
+        `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts?key=${API_KEY}`
+      );
+      return response.data.items || [];
+    } catch (innerError) {
+      return [];
+    }
   }
 };
 
@@ -66,6 +84,22 @@ export const getArticleById = async (postId) => {
   }
 
   try {
+    // Try to fetch from Blogger API first to get live content
+    try {
+      const response = await axios.get(
+        `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts/${postId}?key=${API_KEY}`
+      );
+      if (response.data) {
+        const docSnap = await getDoc(doc(db, "articles", postId));
+        if (docSnap.exists()) {
+          return { ...docSnap.data(), ...response.data };
+        }
+        return response.data;
+      }
+    } catch (e) {
+      // Ignore and fallback to Firestore (likely a custom article)
+    }
+
     const docSnap = await getDoc(doc(db, "articles", postId));
     if (docSnap.exists()) {
       return { id: docSnap.id, ...docSnap.data() };

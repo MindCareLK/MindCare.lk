@@ -74,11 +74,13 @@ const personalInfo: InfoField[] = [
     id: 'gender',
     label: 'Gender',
     icon: 'users',
+    fullWidth: true,
   },
   {
     id: 'dob',
     label: 'Date of Birth',
     icon: 'calendar',
+    fullWidth: true,
   },
 ];
 
@@ -125,11 +127,43 @@ function InfoFieldCard({
   const parseDobString = (dobStr: string): Date => {
     if (!dobStr || dobStr.startsWith('Add') || dobStr.startsWith('Select')) return new Date(2000, 0, 1);
     const parsed = new Date(dobStr);
-    return isNaN(parsed.getTime()) ? new Date(2000, 0, 1) : parsed;
+    if (!isNaN(parsed.getTime())) return parsed;
+
+    // Fallback manual parser for Hermes engine (e.g. "June 26, 2026" or "26 June 2026")
+    try {
+      const cleaned = dobStr.replace(/,/g, '').trim();
+      const parts = cleaned.split(/\s+/);
+      if (parts.length === 3) {
+        const monthNames = [
+          'january', 'february', 'march', 'april', 'may', 'june',
+          'july', 'august', 'september', 'october', 'november', 'december'
+        ];
+        let monthStr = parts[0].toLowerCase();
+        let month = monthNames.indexOf(monthStr);
+        let day = parseInt(parts[1], 10);
+        let year = parseInt(parts[2], 10);
+        if (month === -1) {
+          monthStr = parts[1].toLowerCase();
+          month = monthNames.indexOf(monthStr);
+          day = parseInt(parts[0], 10);
+        }
+        if (month !== -1 && !isNaN(day) && !isNaN(year)) {
+          return new Date(year, month, day);
+        }
+      }
+    } catch (e) {
+      // Ignored, fallback to default below
+    }
+    return new Date(2000, 0, 1);
   };
 
-  const formatDob = (date: Date) =>
-    date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const formatDob = (date: Date): string => {
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return `${monthNames[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+  };
 
   const isSelectableField = field.id === 'gender' || field.id === 'dob';
 
@@ -240,17 +274,32 @@ export default function ProfilePage() {
   const params = useLocalSearchParams<{ filledName?: string; filledEmail?: string; filledGender?: string; filledDob?: string }>();
 
   useEffect(() => {
-    const nextProfile = {
-      name: params.filledName ?? memberProfile.name,
-      email: params.filledEmail ?? memberProfile.email,
-      gender: params.filledGender ?? memberProfile.gender,
-      dob: params.filledDob ?? memberProfile.dob,
-    };
+    if (params.filledName || params.filledEmail || params.filledGender || params.filledDob) {
+      const name = params.filledName ?? memberProfile.name;
+      const email = params.filledEmail ?? memberProfile.email;
+      const gender = params.filledGender ?? memberProfile.gender;
+      const dob = params.filledDob ?? memberProfile.dob;
 
-    if (nextProfile.name || nextProfile.email || nextProfile.gender || nextProfile.dob) {
-      setMemberProfile(nextProfile);
+      if (
+        name !== memberProfile.name ||
+        email !== memberProfile.email ||
+        gender !== memberProfile.gender ||
+        dob !== memberProfile.dob
+      ) {
+        setMemberProfile({ name, email, gender, dob });
+      }
     }
-  }, [memberProfile.dob, memberProfile.email, memberProfile.gender, params.filledDob, params.filledEmail, params.filledGender, params.filledName, setMemberProfile]);
+  }, [
+    params.filledDob,
+    params.filledEmail,
+    params.filledGender,
+    params.filledName,
+    memberProfile.name,
+    memberProfile.email,
+    memberProfile.gender,
+    memberProfile.dob,
+    setMemberProfile,
+  ]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -328,7 +377,7 @@ export default function ProfilePage() {
     return () => {
       isMounted = false;
     };
-  }, [currentUser, memberProfile, setMemberProfile]);
+  }, [currentUser?.uid, setMemberProfile]);
 
   const handleEditPress = () => {
     if (isEditing) {

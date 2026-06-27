@@ -37,7 +37,18 @@ type ReadCard = {
   title: string;
   author: string;
   minutes: string;
-  image: string;
+  image: any;
+  imageIndex: number;
+  remoteImageUrl?: string;
+  labels: string[];
+};
+
+const extractArticleImage = (item: any) => {
+  if (item.images && item.images[0]?.url) {
+    return item.images[0].url;
+  }
+  const match = item.content?.match(/<img[^>]+src=["']([^"']+)["']/i);
+  return match ? match[1] : null;
 };
 
 const moodOptions: MoodOption[] = [
@@ -157,21 +168,26 @@ export default function HomePage() {
 
 
     const coverImages = [
-      "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/How Social Media Affects Mental Health.png",
-      "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/The Global State of Mental Health.png",
-      "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Understanding Anxiety in Daily Life.png",
-      "https://raw.githubusercontent.com/MindCareLK/MindCare.lk/main/assets/images/Understanding Major Depressive Disorder.png",
+      require("../../assets/images/How Social Media Affects Mental Health.png"),
+      require("../../assets/images/The Global State of Mental Health.png"),
+      require("../../assets/images/Understanding Anxiety in Daily Life.png"),
+      require("../../assets/images/Understanding Major Depressive Disorder.png"),
     ];
 
-      // Fix: directly slice the 'data' array since it already contains the items
-      const formatted: ReadCard[] = data?.slice(0, 3).map((item: any, index: number) => ({
-        id: item.id,
-        category: "BLOG",
-        title: item.title.replace(/<[^>]+>/g, ""),
-        author: item.author?.displayName || "Admin",
-        minutes: "5 min read",
-        image: coverImages[index % coverImages.length],
-      }));
+      const formatted: ReadCard[] = data?.map((item: any, index: number) => {
+        const bloggerImage = extractArticleImage(item);
+        return {
+          id: item.id,
+          category: item.labels && item.labels.length > 0 ? item.labels[0].toUpperCase() : "BLOG",
+          title: item.title.replace(/<[^>]+>/g, ""),
+          author: item.author?.displayName || "Admin",
+          minutes: "5 min read",
+          image: bloggerImage ? { uri: bloggerImage } : coverImages[index % coverImages.length],
+          imageIndex: bloggerImage ? -1 : index % coverImages.length,
+          remoteImageUrl: bloggerImage || undefined,
+          labels: item.labels || [],
+        };
+      });
 
       setReads(formatted || []);
     } catch (error) {
@@ -284,36 +300,54 @@ export default function HomePage() {
 
           <Text style={styles.readsTitle}>Mindful Reads</Text>
 
-          {reads.map((item) => (
-            <TouchableOpacity
-              style={styles.readCard}
-              key={item.id}
-              activeOpacity={0.85}
-              onPress={() =>
-                router.push(`/article-detail?id=${item.id}` as any)
-              }
-            >
-              <View style={styles.readImageWrap}>
-                <Image source={{ uri: item.image }} style={styles.readImage} />
-                <View style={styles.categoryTag}>
-                  <Text style={styles.categoryText}>{item.category}</Text>
-                </View>
-              </View>
+          {(() => {
+            const filtered = reads.filter((item) =>
+              item.labels.some((l) => l.toLowerCase() === selectedMood.toLowerCase())
+            ).slice(0, 3);
 
-              <Text style={styles.readTitle}>{item.title}</Text>
+            if (filtered.length === 0) {
+              return (
+                <View style={styles.noReadsWrap}>
+                  <Text style={styles.noReadsText}>No wellness articles found for this mood.</Text>
+                </View>
+              );
+            }
 
-              <View style={styles.readMetaRow}>
-                <View style={styles.metaGroup}>
-                  <Feather name="user" size={10} color="#B1B9C4" />
-                  <Text style={styles.metaText}>{item.author}</Text>
+            return filtered.map((item) => (
+              <TouchableOpacity
+                style={styles.readCard}
+                key={item.id}
+                activeOpacity={0.85}
+                onPress={() => {
+                  if (item.remoteImageUrl) {
+                    router.push(`/article-detail?id=${item.id}&image=${encodeURIComponent(item.remoteImageUrl)}` as any);
+                  } else {
+                    router.push(`/article-detail?id=${item.id}&imageIndex=${item.imageIndex}` as any);
+                  }
+                }}
+              >
+                <View style={styles.readImageWrap}>
+                  <Image source={item.image} style={styles.readImage} />
+                  <View style={styles.categoryTag}>
+                    <Text style={styles.categoryText}>{item.category}</Text>
+                  </View>
                 </View>
-                <View style={styles.metaGroup}>
-                  <Feather name="clock" size={10} color="#B1B9C4" />
-                  <Text style={styles.metaText}>{item.minutes}</Text>
+
+                <Text style={styles.readTitle}>{item.title}</Text>
+
+                <View style={styles.readMetaRow}>
+                  <View style={styles.metaGroup}>
+                    <Feather name="user" size={10} color="#B1B9C4" />
+                    <Text style={styles.metaText}>{item.author}</Text>
+                  </View>
+                  <View style={styles.metaGroup}>
+                    <Feather name="clock" size={10} color="#B1B9C4" />
+                    <Text style={styles.metaText}>{item.minutes}</Text>
+                  </View>
                 </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            ));
+          })()}
 
           <TouchableOpacity
             style={styles.moreButton}
@@ -632,5 +666,15 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: "#707884",
     fontWeight: "600",
+  },
+  noReadsWrap: {
+    paddingVertical: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  noReadsText: {
+    fontFamily: "Inter",
+    fontSize: 13,
+    color: "#8A95A3",
   },
 });

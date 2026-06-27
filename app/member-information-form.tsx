@@ -57,8 +57,13 @@ export default function CounselorRegisterScreen() {
     });
   };
 
-  const formatDob = (date: Date) =>
-  date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const formatDob = (date: Date): string => {
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return `${monthNames[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+  };
 
 
   return (
