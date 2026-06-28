@@ -54,8 +54,13 @@ service cloud.firestore {
     
     // Members
     match /members/{memberId} {
-      allow read, write: if request.auth != null && request.auth.uid == memberId;
-      allow list, read, delete: if isAdmin();
+      allow read: if request.auth != null && (
+        request.auth.uid == memberId ||
+        exists(/databases/$(database)/documents/counselors/$(request.auth.uid)) ||
+        isAdmin()
+      );
+      allow write: if request.auth != null && request.auth.uid == memberId;
+      allow list, delete: if isAdmin();
     }
 
     // Chatbot Sessions

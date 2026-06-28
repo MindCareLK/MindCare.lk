@@ -17,6 +17,7 @@ import { questions, options } from "../../constants/questions";
 import dataset from "../../constants/dataset.json";
 import { getChatResponse, getFinalSummary, Message, QuestionnaireAnswer } from "../../services/chatbotApi";
 import { useAuthContext } from "../../components/AuthContext";
+import { router } from "expo-router";
 import { db } from "../../lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 
@@ -303,6 +304,46 @@ export default function AiChatPage() {
       ]
     );
   };
+
+  if (!currentUser) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="dark-content" backgroundColor="#F2F5F8" translucent={false} />
+        <View style={styles.container}>
+          <ScrollView
+            contentContainerStyle={[styles.scrollContent, { flexGrow: 1, justifyContent: 'center' }]}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.welcomeCard}>
+              <View style={styles.welcomeIconWrap}>
+                <Feather name="lock" size={40} color="#2F88E8" />
+              </View>
+              <Text style={styles.welcomeTitle}>ලොග් වීම අවශ්‍යයි (Login Required)</Text>
+              <Text style={styles.welcomeSubtitle}>
+                AI සහායකයා භාවිතා කිරීමට සහ ඔබේ ඇගයීම් සුරැකීමට කරුණාකර ප්‍රථමයෙන් ගිණුමට ලොග් වන්න.
+              </Text>
+              <TouchableOpacity
+                style={styles.primaryButton}
+                activeOpacity={0.85}
+                onPress={() => router.push('/member-login')}
+              >
+                <Text style={styles.primaryButtonText}>Sign In</Text>
+                <Feather name="log-in" size={16} color="#FFFFFF" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.primaryButton, { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', marginTop: 12 }]}
+                activeOpacity={0.85}
+                onPress={() => router.push('/member-register')}
+              >
+                <Text style={[styles.primaryButtonText, { color: '#4A5568' }]}>Create Free Account</Text>
+                <Feather name="user-plus" size={16} color="#4A5568" />
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (loadingSession) {
     return (

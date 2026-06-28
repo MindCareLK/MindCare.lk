@@ -1,7 +1,7 @@
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { StatusBar, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator, Platform } from 'react-native';
+import { StatusBar, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator, Platform, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/components/AuthContext';
 import { addCounselorNotification } from '@/components/notification-store';
@@ -12,6 +12,8 @@ import { getMemberProfile, upsertMemberProfile } from '@/lib/members';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
+import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from 'expo-haptics';
 import { doc, getDoc } from 'firebase/firestore';
 
 type ProfileForm = {
@@ -19,6 +21,7 @@ type ProfileForm = {
   email: string;
   gender: string;
   dob: string;
+  avatarUrl?: string;
 };
 
 type InfoField = {
@@ -336,12 +339,14 @@ export default function ProfilePage() {
               email: savedProfile.email,
               gender: savedProfile.gender,
               dob: savedProfile.dob,
+              avatarUrl: savedProfile.avatarUrl || '',
             }
           : {
               name: currentUser.displayName || deriveNameFromEmail(currentUser.email ?? ''),
               email: currentUser.email || '',
               gender: '',
               dob: '',
+              avatarUrl: '',
             };
 
         if (!isMounted) {
@@ -362,6 +367,7 @@ export default function ProfilePage() {
           email: currentUser.email || '',
           gender: '',
           dob: '',
+          avatarUrl: '',
         };
 
         setProfile(fallbackProfile);
@@ -391,6 +397,7 @@ export default function ProfilePage() {
             name: draftProfile.name,
             gender: draftProfile.gender,
             dob: draftProfile.dob,
+            avatarUrl: draftProfile.avatarUrl,
           });
           setProfile(draftProfile);
           setMemberProfile(draftProfile);
@@ -410,6 +417,103 @@ export default function ProfilePage() {
         animated: true,
       });
     });
+  };
+
+  const selectImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permission Denied',
+        'We need permission to access your photos to set a profile picture.'
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+      base64: true,
+    });
+
+    if (!result.canceled && result.assets[0]?.uri) {
+      if (result.assets[0].base64) {
+        // Enforce size limit (500KB)
+        const sizeInBytes = (result.assets[0].base64.length * 3) / 4;
+        const sizeInKB = sizeInBytes / 1024;
+        if (sizeInKB > 500) {
+          Alert.alert(
+            'Image Too Large',
+            'The selected image exceeds the 500 KB limit. Please select a smaller image or crop it more.'
+          );
+          return;
+        }
+
+        const uploadedAvatarUrl = `data:image/jpeg;base64,${result.assets[0].base64}`;
+        setDraftProfile(prev => ({ ...prev, avatarUrl: uploadedAvatarUrl }));
+      }
+      void Haptics.selectionAsync();
+    }
+  };
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permission Denied',
+        'We need permission to use the camera to take a profile picture.'
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+      base64: true,
+    });
+
+    if (!result.canceled && result.assets[0]?.uri) {
+      if (result.assets[0].base64) {
+        // Enforce size limit (500KB)
+        const sizeInBytes = (result.assets[0].base64.length * 3) / 4;
+        const sizeInKB = sizeInBytes / 1024;
+        if (sizeInKB > 500) {
+          Alert.alert(
+            'Image Too Large',
+            'The selected image exceeds the 500 KB limit. Please select a smaller image or crop it more.'
+          );
+          return;
+        }
+
+        const uploadedAvatarUrl = `data:image/jpeg;base64,${result.assets[0].base64}`;
+        setDraftProfile(prev => ({ ...prev, avatarUrl: uploadedAvatarUrl }));
+      }
+      void Haptics.selectionAsync();
+    }
+  };
+
+  const handleAvatarPress = () => {
+    if (!isEditing) return;
+    
+    Alert.alert(
+      'Profile Picture',
+      'Choose an option to set your profile picture:',
+      [
+        { text: 'Choose from Library', onPress: selectImage },
+        { text: 'Take Photo', onPress: takePhoto },
+        {
+          text: 'Remove Picture',
+          style: 'destructive',
+          onPress: () => {
+            setDraftProfile(prev => ({ ...prev, avatarUrl: '' }));
+            void Haptics.selectionAsync();
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
   };
 
   const handleCancel = () => {
@@ -615,9 +719,28 @@ export default function ProfilePage() {
           </View>
 
           <View style={styles.sheetTop}>
-            <View style={styles.avatarCard}>
-              <Ionicons name="person-outline" size={28} color="#FFFFFF" />
-            </View>
+            <TouchableOpacity 
+              style={styles.avatarCard} 
+              activeOpacity={isEditing ? 0.8 : 1}
+              onPress={handleAvatarPress}
+            >
+              {isEditing ? (
+                draftProfile.avatarUrl ? (
+                  <Image source={{ uri: draftProfile.avatarUrl }} style={styles.avatarImage} />
+                ) : (
+                  <View style={styles.avatarEditPlaceholder}>
+                    <Ionicons name="camera-outline" size={20} color="#FFFFFF" />
+                    <Text style={styles.avatarEditText}>Edit</Text>
+                  </View>
+                )
+              ) : (
+                profile.avatarUrl ? (
+                  <Image source={{ uri: profile.avatarUrl }} style={styles.avatarImage} />
+                ) : (
+                  <Ionicons name="person-outline" size={28} color="#FFFFFF" />
+                )
+              )}
+            </TouchableOpacity>
 
             <View style={styles.profileSummaryCard}>
               <Text style={styles.profileName}>
@@ -966,6 +1089,25 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
     elevation: 8,
+  },
+  avatarImage: {
+    width: 68,
+    height: 68,
+    borderRadius: 16,
+  },
+  avatarEditPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    height: '100%',
+  },
+  avatarEditText: {
+    fontFamily: 'Inter',
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginTop: 2,
+    textTransform: 'uppercase',
   },
   sectionTitle: {
     fontFamily: 'Inter',

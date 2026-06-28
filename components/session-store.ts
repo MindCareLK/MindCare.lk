@@ -1,4 +1,4 @@
-import { collection, addDoc, updateDoc, doc, deleteDoc, query, where, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, deleteDoc, query, where, onSnapshot, getDocs, getDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import { router } from 'expo-router';
@@ -15,6 +15,7 @@ export type BookedSession = {
   status: 'Upcoming' | 'Completed' | 'Pending';
   actions?: boolean;
   patientId?: string;
+  patientName?: string;
 };
 
 export function parseDateTime(dateStr: string, timeStr: string): Date | null {
@@ -188,6 +189,7 @@ export function useCounselorSessions(counselorName: string) {
             status: status,
             actions: !isPast && (data.status === 'scheduled' || data.status === 'pending'),
             patientId: data.patientId,
+            patientName: data.patientName || '',
           };
         });
         
@@ -231,9 +233,26 @@ export async function addBookedSession(session: (Omit<BookedSession, 'id'> | Boo
     console.log('[addBookedSession] Resolved counselorUid:', counselorUid);
 
     console.log('[addBookedSession] Creating appointment document for patient:', user.uid);
+    let patientName = user.displayName || '';
+    if (db) {
+      try {
+        const memberSnap = await getDoc(doc(db, 'members', user.uid));
+        if (memberSnap.exists()) {
+          const mData = memberSnap.data();
+          patientName = mData.name || mData.displayName || patientName;
+        }
+      } catch (err) {
+        console.error("Error reading patient name for appointment booking:", err);
+      }
+    }
+    if (!patientName.trim()) {
+      patientName = 'Patient';
+    }
+
     const note = (session as any).note || 'Seeking mental health guidance';
     await addDoc(collection(db, 'appointments'), {
       patientId: user.uid,
+      patientName: patientName,
       counselorId: session.doctor,
       counselorUid: counselorUid,
       date: session.date,

@@ -12,10 +12,14 @@ import { auth, db } from '@/lib/firebase';
 import { useCounselorSessions } from '@/components/session-store';
 import { collection, query, where, onSnapshot, updateDoc, doc, addDoc } from 'firebase/firestore';
 
-function PatientName({ uid, style }: { uid: string; style?: any }) {
-  const [name, setName] = useState<string>('Loading...');
+function PatientName({ uid, style, defaultName }: { uid: string; style?: any; defaultName?: string }) {
+  const [name, setName] = useState<string>(defaultName || 'Loading...');
 
   useEffect(() => {
+    if (defaultName) {
+      setName(defaultName);
+      return;
+    }
     if (!uid) {
       setName('Unknown Patient');
       return;
@@ -27,7 +31,7 @@ function PatientName({ uid, style }: { uid: string; style?: any }) {
       if (isMounted) setName('Unknown Patient');
     });
     return () => { isMounted = false; };
-  }, [uid]);
+  }, [uid, defaultName]);
 
   return <Text style={style || styles.sessionName}>{name}</Text>;
 }
@@ -282,7 +286,7 @@ export default function CounselorDashboardScreen() {
                     style={styles.requestAvatar}
                   />
                   <View style={styles.requestMeta}>
-                    <PatientName uid={appt.patientId || ''} style={styles.requestName} />
+                    <PatientName uid={appt.patientId || ''} defaultName={appt.patientName} style={styles.requestName} />
                     <Text style={styles.requestTime}>Requested for {appt.date}, {appt.time}</Text>
                   </View>
                 </View>
@@ -341,7 +345,7 @@ export default function CounselorDashboardScreen() {
                 <Text style={styles.sessionTime}>{session.time}</Text>
                 <View style={styles.sessionDivider} />
                 <View style={styles.sessionMain}>
-                  <PatientName uid={session.patientId || ''} />
+                  <PatientName uid={session.patientId || ''} defaultName={session.patientName} />
                   <Text style={styles.sessionType}>Video call</Text>
                 </View>
                 <TouchableOpacity

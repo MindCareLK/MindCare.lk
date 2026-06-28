@@ -26,6 +26,7 @@ export type MemberProfileRecord = {
   gender: string;
   dob: string;
   profileCompleted: boolean;
+  avatarUrl?: string;
   createdAt?: unknown;
   updatedAt?: unknown;
 };
@@ -34,6 +35,7 @@ export type MemberProfileInput = {
   name: string;
   gender: string;
   dob: string;
+  avatarUrl?: string;
 };
 
 const memberDocRef = (uid: string) => {
@@ -85,6 +87,7 @@ function normalizeMemberProfile(
     gender: typeof data.gender === "string" ? data.gender : "",
     dob: typeof data.dob === "string" ? data.dob : "",
     profileCompleted: Boolean(data.profileCompleted),
+    avatarUrl: typeof data.avatarUrl === "string" ? data.avatarUrl : "",
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   };
@@ -195,6 +198,7 @@ export async function upsertMemberProfile(
       displayName: normalizedName,
       gender: input.gender,
       dob: input.dob,
+      avatarUrl: input.avatarUrl ?? existingProfile?.avatarUrl ?? "",
       profileCompleted: true,
       createdAt: existingProfile?.createdAt ?? serverTimestamp(),
       updatedAt: serverTimestamp(),
