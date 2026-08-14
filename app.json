@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "MindCare.lk",
-    "slug": "MindCareLK",
+    "slug": "myApp",
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "myapp",
@@ -18,7 +18,8 @@
       "bundleIdentifier": "com.tharushatheekshana.MindCareLK",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "bitcode": false
     },
     "android": {
       "adaptiveIcon": {
@@ -27,7 +28,17 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.tharushatheekshana.MindCareLK"
+      "package": "com.tharushatheekshana.MindCareLK",
+      "permissions": [
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.CAMERA",
+        "android.permission.INTERNET",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WAKE_LOCK",
+        "android.permission.BLUETOOTH"
+      ]
     },
     "web": {
       "output": "static",
@@ -56,6 +67,7 @@
       "eas": {
         "projectId": "9ad1e0cf-f37a-4b96-914d-7e2bd0f7e59c"
       }
-    }
+    },
+    "owner": "tharushatheekshana"
   }
 }

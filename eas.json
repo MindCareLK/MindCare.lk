@@ -23,6 +23,9 @@
     },
     "preview": {
       "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyAvWHtUlg2OlOyVSOt0HBUAPv9jnyCshKI",
         "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "mindcarelk-susl.firebaseapp.com",

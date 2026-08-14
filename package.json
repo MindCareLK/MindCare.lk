@@ -57,6 +57,7 @@
     "@config-plugins/react-native-webrtc": "^15.0.1",
     "@react-native-community/cli": "^20.0.1",
     "@types/react": "~19.2.14",
+    "eas-cli": "^21.8.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~56.0.4",
     "typescript": "~6.0.3"
