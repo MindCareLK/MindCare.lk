@@ -1,0 +1,8 @@
+backend/
+mindcare-backend/
+.venv/
+venv/
+env/
+.git/
+.vscode/
+.idea/
