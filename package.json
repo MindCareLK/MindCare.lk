@@ -1,5 +1,5 @@
 {
-  "name": "myapp",
+  "name": "mindcarelk",
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
@@ -17,12 +17,10 @@
     "@react-native-community/datetimepicker": "9.1.0",
     "@react-native-google-signin/google-signin": "^16.1.2",
     "@react-native-picker/picker": "2.11.4",
-    "@react-navigation/bottom-tabs": "^7.4.0",
-    "@react-navigation/elements": "^2.6.3",
-    "@react-navigation/native": "^7.1.8",
     "axios": "^1.17.0",
     "expo": "~56.0.19",
     "expo-auth-session": "~56.0.16",
+    "expo-build-properties": "~56.0.25",
     "expo-constants": "^56.0.16",
     "expo-crypto": "~56.0.4",
     "expo-dev-client": "~56.0.20",
@@ -57,10 +55,18 @@
     "@config-plugins/react-native-webrtc": "^15.0.1",
     "@react-native-community/cli": "^20.0.1",
     "@types/react": "~19.2.14",
-    "eas-cli": "^21.8.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~56.0.4",
     "typescript": "~6.0.3"
+  },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "react-native-webrtc"
+        ]
+      }
+    }
   },
   "private": true
 }

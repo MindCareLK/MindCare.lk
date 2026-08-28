@@ -171,7 +171,7 @@ export default function HomePage() {
   const [groundingStep, setGroundingStep] = useState(5);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
     if (isBreathingVisible) {
       setBreathingPhase('Inhale');
       setTimerCount(4);

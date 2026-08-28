@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Activit
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { getAllMembers, getAllCounselors, getAllAppointments } from '@/lib/admin';
+import { getAllMembers, getAllCounselors, getAllAppointments, updateCounselorStatus } from '@/lib/admin';
 
 export default function AdminDashboardScreen() {
   const { width } = useWindowDimensions();
@@ -66,6 +66,15 @@ export default function AdminDashboardScreen() {
   const handleRefresh = () => {
     setLoading(true);
     loadData();
+  };
+
+  const handleApproveCounselor = async (counselor: any) => {
+    try {
+      await updateCounselorStatus(counselor.uid, true);
+      await loadData();
+    } catch (error) {
+      console.error("Error approving counselor:", error);
+    }
   };
 
   if (loading) {
@@ -192,11 +201,20 @@ export default function AdminDashboardScreen() {
                       <Text style={styles.rowSubtitle}>{couns.email}</Text>
                     </View>
                     <View style={styles.rowRight}>
-                      <View style={[styles.statusTag, couns.profileCompleted ? styles.tagComplete : styles.tagPending]}>
-                        <Text style={[styles.tagText, couns.profileCompleted ? styles.tagTextComplete : styles.tagTextPending]}>
-                          {couns.profileCompleted ? 'Active' : 'Pending'}
-                        </Text>
-                      </View>
+                      {!couns.profileCompleted ? (
+                        <TouchableOpacity
+                          style={styles.dashApproveBtn}
+                          onPress={() => void handleApproveCounselor(couns)}
+                          activeOpacity={0.8}
+                        >
+                          <Feather name="check" size={12} color="#FFFFFF" />
+                          <Text style={styles.dashApproveText}>Approve</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={[styles.statusTag, styles.tagComplete]}>
+                          <Text style={[styles.tagText, styles.tagTextComplete]}>Active</Text>
+                        </View>
+                      )}
                     </View>
                   </View>
                 ))
@@ -424,6 +442,21 @@ const styles = StyleSheet.create({
   },
   tagTextPending: {
     color: '#D97706',
+  },
+  dashApproveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#10B981',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    gap: 4,
+  },
+  dashApproveText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   footer: {
     alignItems: 'center',

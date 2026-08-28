@@ -281,7 +281,7 @@ export default function AiChatPage() {
             setAnswersContext([]);
             setCurrentSuggestion(null);
             setSelectedOptionId(null);
-            const initialMessages = [
+            const initialMessages: Message[] = [
               {
                 id: "welcome",
                 sender: "assistant",

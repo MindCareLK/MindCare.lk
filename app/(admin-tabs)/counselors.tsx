@@ -21,6 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   deleteCounselor,
   getAllCounselors,
+  updateCounselorStatus,
   type CounselorRecord,
 } from '@/lib/admin';
 
@@ -103,6 +104,22 @@ export default function AdminCounselorsScreen() {
     setDeleteTarget(null);
   };
 
+  /* ---- approve / toggle status ---- */
+
+  const handleApproveCounselor = async (counselor: CounselorRecord) => {
+    try {
+      const nextState = !counselor.profileCompleted;
+      await updateCounselorStatus(counselor.uid, nextState);
+      await fetchCounselors();
+      Alert.alert(
+        'Success',
+        `Counselor ${counselor.fullName || counselor.displayName || ''} is now ${nextState ? 'approved and active' : 'set to pending'}.`
+      );
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Failed to update counselor status.');
+    }
+  };
+
   /* ---- render helpers ---- */
 
   const renderStatusBadge = (isComplete: boolean) => {
@@ -129,13 +146,25 @@ export default function AdminCounselorsScreen() {
               {item.email}
             </Text>
           </View>
-          <TouchableOpacity
-            style={styles.deleteBtn}
-            onPress={() => openDeleteModal(item)}
-            activeOpacity={0.7}
-          >
-            <Feather name="trash-2" size={16} color="#EF4444" />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {!item.profileCompleted ? (
+              <TouchableOpacity
+                style={styles.approveBtn}
+                onPress={() => void handleApproveCounselor(item)}
+                activeOpacity={0.8}
+              >
+                <Feather name="check" size={14} color="#FFFFFF" />
+                <Text style={styles.approveBtnText}>Approve</Text>
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity
+              style={styles.deleteBtn}
+              onPress={() => openDeleteModal(item)}
+              activeOpacity={0.7}
+            >
+              <Feather name="trash-2" size={16} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {item.specialty ? (
@@ -149,7 +178,18 @@ export default function AdminCounselorsScreen() {
           <Text style={styles.qualText}>
             {qualCount} qualification{qualCount !== 1 ? 's' : ''}
           </Text>
-          {renderStatusBadge(item.profileCompleted)}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {renderStatusBadge(item.profileCompleted)}
+            {item.profileCompleted ? (
+              <TouchableOpacity
+                style={styles.revokeRowBtn}
+                onPress={() => void handleApproveCounselor(item)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.revokeBtnText}>Revoke</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
         </View>
       </View>
     );
@@ -210,7 +250,7 @@ export default function AdminCounselorsScreen() {
               <Text style={[styles.th, { flex: 2 }]}>SPECIALTY</Text>
               <Text style={[styles.th, { flex: 1.5 }]}>QUALIFICATIONS</Text>
               <Text style={[styles.th, { flex: 1.5 }]}>STATUS</Text>
-              <Text style={[styles.th, { flex: 1, textAlign: 'right' }]}>ACTIONS</Text>
+              <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>ACTIONS</Text>
             </View>
 
             {filteredCounselors.length === 0 ? (
@@ -237,7 +277,25 @@ export default function AdminCounselorsScreen() {
                     <View style={[styles.td, { flex: 1.5 }]}>
                       {renderStatusBadge(couns.profileCompleted)}
                     </View>
-                    <View style={[styles.td, { flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }]}>
+                    <View style={[styles.td, { flex: 2, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8 }]}>
+                      {!couns.profileCompleted ? (
+                        <TouchableOpacity
+                          style={styles.approveBtn}
+                          onPress={() => void handleApproveCounselor(couns)}
+                          activeOpacity={0.8}
+                        >
+                          <Feather name="check" size={14} color="#FFFFFF" />
+                          <Text style={styles.approveBtnText}>Approve</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          style={styles.revokeRowBtn}
+                          onPress={() => void handleApproveCounselor(couns)}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.revokeBtnText}>Revoke</Text>
+                        </TouchableOpacity>
+                      )}
                       <TouchableOpacity style={styles.deleteRowBtn} onPress={() => openDeleteModal(couns)}>
                         <Feather name="trash-2" size={16} color="#EF4444" />
                       </TouchableOpacity>
@@ -641,5 +699,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  approveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#10B981',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    gap: 4,
+  },
+  approveBtnText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  revokeRowBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+  },
+  revokeBtnText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
   },
 });

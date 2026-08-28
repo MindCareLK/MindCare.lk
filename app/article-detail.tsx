@@ -11,7 +11,7 @@ import {
   Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getArticleById } from "../services/bloggerApi";
+import { getArticleById } from "@/features/article/services/bloggerApi";
 import RenderHtml from "react-native-render-html";
 
 const { width } = Dimensions.get("window");

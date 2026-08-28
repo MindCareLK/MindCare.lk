@@ -1,18 +1,12 @@
 {
   "expo": {
     "name": "MindCare.lk",
-    "slug": "myApp",
+    "slug": "MindCareLK",
     "version": "1.0.0",
     "orientation": "portrait",
-    "scheme": "myapp",
+    "scheme": "mindcarelk",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/Logo.png",
-    "splash": {
-      "image": "./assets/Logo.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
-    },
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tharushatheekshana.MindCareLK",
@@ -26,7 +20,6 @@
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/Logo.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.tharushatheekshana.MindCareLK",
       "permissions": [
@@ -57,7 +50,23 @@
           "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for audio/video calls."
         }
       ],
-      "expo-splash-screen"
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/Logo.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#FFFFFF"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "enableProguardInReleaseBuilds": true
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
@@ -65,7 +74,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "9ad1e0cf-f37a-4b96-914d-7e2bd0f7e59c"
+        "projectId": "b592f13a-921d-4d16-a43f-e48a16973b03"
       }
     },
     "owner": "tharushatheekshana"
